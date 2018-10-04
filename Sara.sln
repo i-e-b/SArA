@@ -1,0 +1,37 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 15
+VisualStudioVersion = 15.0.28010.2036
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Sara", "src\Sara\Sara.csproj", "{178D8559-A55D-4DCE-9D6D-43D5F9DAB700}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Sara.Tests", "src\Sara.Tests\Sara.Tests.csproj", "{F87C943D-FE7B-43CF-9930-859BB3C6EFF6}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "_Info", "_Info", "{372226AC-5BF5-4E4E-8093-3895AEAB2ECB}"
+	ProjectSection(SolutionItems) = preProject
+		LICENSE = LICENSE
+		README.md = README.md
+	EndProjectSection
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{178D8559-A55D-4DCE-9D6D-43D5F9DAB700}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{178D8559-A55D-4DCE-9D6D-43D5F9DAB700}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{178D8559-A55D-4DCE-9D6D-43D5F9DAB700}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{178D8559-A55D-4DCE-9D6D-43D5F9DAB700}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F87C943D-FE7B-43CF-9930-859BB3C6EFF6}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F87C943D-FE7B-43CF-9930-859BB3C6EFF6}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F87C943D-FE7B-43CF-9930-859BB3C6EFF6}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F87C943D-FE7B-43CF-9930-859BB3C6EFF6}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {97F7A82A-EDE1-4592-91BD-A2BA43C8BD22}
+	EndGlobalSection
+EndGlobal
