@@ -15,12 +15,5 @@
         /// Number of references 
         /// </summary>
         public ushort RefCount;
-
-        /* TODO: include later after testing
-        /// <summary>
-        /// Head reduced by one. Can store meta-data before pointed locations to support full stack-like behaviour
-        /// </summary>
-        public ushort Prev;
-        */
     }
 }
