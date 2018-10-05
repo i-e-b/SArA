@@ -192,7 +192,10 @@
             // reset any arenas still zeroed
             for (int i = 0; i < _arenaCount; i++)
             {
-                if (_meta[i].RefCount == 0) _meta[i].Head = 0;
+                if (_meta[i].RefCount == 0) {
+                    _meta[i].Head = 0;
+                    if (i < _currentArena) _currentArena = i; // keep allocations packed in low memory
+                }
             }
         }
     }

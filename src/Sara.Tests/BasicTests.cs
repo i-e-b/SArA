@@ -224,6 +224,10 @@ namespace Sara.Tests
 
             Assert.That(subject.CurrentArena(), Is.GreaterThanOrEqualTo(1000));
             Assert.That(result, Is.GreaterThan(Giga.Bytes(1)));
+            
+            // Test a scan
+            subject.ScanAndSweep(new long[0]);
+            Assert.That(subject.CurrentArena(), Is.Zero);
         }
     }
 }
