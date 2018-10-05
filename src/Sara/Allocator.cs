@@ -103,10 +103,8 @@
         /// </summary>
         public void Reference(long ptr)
         {
-            // TODO: set a memory error flag for these bad things?
-            if (ptr < _start || ptr > _limit) return; // bad call!
-            var arena = (ptr - _start) / ArenaSize;
-            if (arena < 0 || arena >= _arenaCount) return; // should never happen
+            var arena = ArenaForPtr(ptr);
+            if (arena < 0) return;
 
             if (_meta[arena].RefCount == ushort.MaxValue) return; // saturated references. Fix your code.
 
@@ -118,13 +116,29 @@
         /// </summary>
         public void Deref(long ptr)
         {
-            if (ptr < _start || ptr > _limit) return; // bad call!
-            var arena = (ptr - _start) / ArenaSize;
-            if (arena < 0 || arena >= _arenaCount) return; // should never happen
-            
-            if (_meta[arena].RefCount == 0) return; // Overfree. Fix your code.
+            var arena = ArenaForPtr(ptr);
+            if (arena < 0) return;
 
-            _meta[arena].RefCount--;
+            var refCount = _meta[arena].RefCount;
+            if (refCount == 0) return; // Overfree. Fix your code.
+
+            refCount--;
+            _meta[arena].RefCount = refCount;
+
+            // If no more references, free the block
+            if (refCount == 0) {
+                _meta[arena].Head = 0;
+                if (arena < _currentArena) _currentArena = arena; // keep allocations packed in low memory. Is this worth it?
+            }
+        }
+
+        private int ArenaForPtr(long ptr)
+        {
+            // TODO: set a memory error flag for these bad things?
+            if (ptr < _start || ptr > _limit) return -1;
+            int arena = (int) ((ptr - _start) / ArenaSize);
+            if (arena < 0 || arena >= _arenaCount) return -1;
+            return arena;
         }
 
         /// <summary>
@@ -162,6 +176,24 @@
         /// </summary>
         public void ScanAndSweep(long[] referenceList)
         {
+            // mark all arenas zero referenced
+            for (int i = 0; i < _arenaCount; i++)
+            {
+                _meta[i].RefCount = 0;
+            }
+
+            // increment for each reference
+            for (int i = 0; i < referenceList.Length; i++)
+            {
+                var a = ArenaForPtr(referenceList[i]);
+                _meta[a].RefCount++;
+            }
+
+            // reset any arenas still zeroed
+            for (int i = 0; i < _arenaCount; i++)
+            {
+                if (_meta[i].RefCount == 0) _meta[i].Head = 0;
+            }
         }
     }
 }
