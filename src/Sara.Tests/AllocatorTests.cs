@@ -3,7 +3,7 @@
 namespace Sara.Tests
 {
     [TestFixture]
-    public class BasicTests
+    public class AllocatorTests
     {
         [Test]
         public void can_allocate_memory_from_a_pool_and_get_a_pointer()

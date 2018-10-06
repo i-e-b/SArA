@@ -44,10 +44,10 @@
     <Reference Include="System.Core" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="BasicTests.cs" />
+    <Compile Include="AllocatorTests.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="ResizeVectorTests.cs" />
     <Compile Include="MemorySimulatorTests.cs" />
+    <Compile Include="VariableVectorTests.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

@@ -7,22 +7,12 @@
     {
         private readonly byte[] _data;
 
-        public MemorySimulator(int byteSize)
+        public MemorySimulator(long byteSize)
         {
             _data = new byte[byteSize];
         }
 
-        public static unsafe byte[] ToByteArray<T>(T argument) where T : unmanaged
-        {
-            var size = sizeof(T);
-            var result = new byte[size];
-            byte* p = (byte*)&argument;
-            for (var i = 0; i < size; i++)
-                result[i] = *p++;
-            return result;
-        }
-
-        public unsafe T Read<T>(int location) where T: unmanaged 
+        public unsafe T Read<T>(long location) where T: unmanaged 
         {
             T result;
             fixed (byte* basePtr = &_data[location]) {
@@ -32,7 +22,7 @@
             return result;
         }
 
-        public unsafe void Write<T>(int location, T value) where T : unmanaged
+        public unsafe void Write<T>(long location, T value) where T : unmanaged
         {
             fixed (byte* basePtr = &_data[location]) {
                 var tgt = (T*)basePtr;
