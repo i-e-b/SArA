@@ -7,7 +7,8 @@
     public class VariableVector : IGcContainer
     {
         public const int ELEMS_PER_CHUNK = 32;
-        public const int CHUNK_BYTES = (1 + ELEMS_PER_CHUNK) * sizeof(ulong);
+        public const int ELEM_SIZE = sizeof(ulong);
+        public const int CHUNK_BYTES = (1 + ELEMS_PER_CHUNK) * ELEM_SIZE;
 
         private readonly Allocator _alloc;
         private readonly MemorySimulator _mem;
@@ -57,17 +58,17 @@
             var chunkHeadPtr = _baseChunkTable;
             for (int i = 0; i < newChunkIdx; i++)
             {
-                chunkHeadPtr = _mem.Read<long>(chunkHeadPtr);
-                if (chunkHeadPtr <= 0) {
+                var nextChunkPtr = _mem.Read<long>(chunkHeadPtr);
+                if (nextChunkPtr <= 0) {
                     // need to alloc a new chunk
-                    var newChunkPtr = NewChunk();
-                    _mem.Write(chunkHeadPtr, newChunkPtr);
-                    chunkHeadPtr = newChunkPtr;
+                    nextChunkPtr = NewChunk();
+                    _mem.Write(chunkHeadPtr, nextChunkPtr);
                 }
+                chunkHeadPtr = nextChunkPtr;
             }
-            
+
             // Write value
-            _mem.Write<ulong>(chunkHeadPtr + 1 + (8 * entryIdx), value);
+            _mem.Write<ulong>(chunkHeadPtr + ELEM_SIZE + (ELEM_SIZE * entryIdx), value);
 
             _elementCount++;
         }
@@ -92,7 +93,7 @@
             }
 
             // pull out the value
-            return _mem.Read<ulong>(chunkHeadPtr + 1 + (8 * entryIdx));
+            return _mem.Read<ulong>(chunkHeadPtr + ELEM_SIZE + (ELEM_SIZE * entryIdx));
         }
     }
 }

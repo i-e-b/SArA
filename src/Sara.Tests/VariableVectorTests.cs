@@ -1,4 +1,5 @@
-﻿using NUnit.Framework;
+﻿using System;
+using NUnit.Framework;
 
 namespace Sara.Tests
 {
@@ -24,9 +25,14 @@ namespace Sara.Tests
         [Test]
         public void can_create_a_vector_larger_than_the_arena_limit()
         {
-            var subject = new VariableVector(new Allocator(0, Mega.Bytes(10)), new MemorySimulator(Mega.Bytes(10)));
+            var memsize = Mega.Bytes(1);
+            var subject = new VariableVector(new Allocator(0, memsize), new MemorySimulator(memsize));
 
-            int full = (int) (Allocator.ArenaSize / sizeof(long));
+            int full = (int) (Allocator.ArenaSize / sizeof(long)) * 2;
+
+            var expected = (full * 8) + ((full / 32) * 8);
+            Console.WriteLine("Expecting to allocate " + expected);
+            if (expected >= memsize) Assert.Fail("memsize is not big enough for the test");
 
             for (int i = 0; i < full; i++)
             {
