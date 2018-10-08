@@ -7,3 +7,10 @@ Once there are no references to an arena, it is considered cleared, and the head
 This design means simple pointers work fine.
 
 Expecting quite high fragmentation. Maybe certain subsets of arenas for smaller objects? Could add defrag later, but that would need smart pointers.
+
+## Parts:
+* [x] Basic allocator
+* [x] Raw memory simulator
+* [ ] Variable array/vector
+* [ ] GC scanning
+* [ ] Hash table

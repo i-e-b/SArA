@@ -21,7 +21,6 @@ namespace Sara.Tests
             Assert.That(r, Is.EqualTo(123));
         }
 
-        
         [Test]
         public void can_create_a_vector_larger_than_the_arena_limit()
         {
@@ -41,6 +40,24 @@ namespace Sara.Tests
 
             var res = subject.Get(full - 1);
             Assert.That(res, Is.EqualTo(full - 1));
+        }
+
+        [Test]
+        public void removing_elements_frees_chunks ()
+        {
+            Assert.Inconclusive();
+        }
+
+        [Test]
+        public void freeing_the_list_frees_all_chunks ()
+        {
+            Assert.Inconclusive();
+        }
+
+        [Test]
+        public void can_add_elements_after_removing_them ()
+        {
+            Assert.Inconclusive();
         }
     }
 }

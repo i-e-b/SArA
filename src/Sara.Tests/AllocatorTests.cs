@@ -229,5 +229,12 @@ namespace Sara.Tests
             subject.ScanAndSweep(new long[0]);
             Assert.That(subject.CurrentArena(), Is.Zero);
         }
+
+        [Test]
+        public void can_read_the_current_allocation_pressure ()
+        {
+            // free memory, # arenas clear, # arenas somewhat used
+            Assert.Inconclusive();
+        }
     }
 }
