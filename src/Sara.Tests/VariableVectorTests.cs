@@ -101,7 +101,27 @@ namespace Sara.Tests
         [Test]
         public void freeing_the_list_frees_all_chunks ()
         {
-            Assert.Fail("not written");
+            // Setup, and allocate a load of entries
+            var memsize = Mega.Bytes(1);
+            var alloc = new Allocator(0, memsize);
+            var subject = new VariableVector(alloc, new MemorySimulator(memsize));
+
+            int full = (int) (Allocator.ArenaSize / sizeof(long)) * 2;
+
+            var expected = (full * 8) + ((full / 32) * 8);
+            Console.WriteLine("Expecting to allocate " + expected);
+            if (expected >= memsize) Assert.Fail("memsize is not big enough for the test");
+
+            for (int i = 0; i < full; i++) { subject.Push((ulong) i); }
+
+            // Now free the whole list at once (including base ptr)
+            subject.Deallocate();
+            
+            // check we've emptied memory
+            alloc.GetState(out var allocatedBytes, out _, out var post_occupied, out _, out var post_refCount, out _);
+            Assert.That(allocatedBytes, Is.Zero, "Expected no bytes allocated");
+            Assert.That(post_occupied, Is.Zero, "Expected no arenas occupied");
+            Assert.That(post_refCount, Is.Zero, "Expected no references");
         }
 
         [Test]

@@ -1,7 +1,8 @@
 ﻿namespace Sara
 {
     /// <summary>
-    /// A variable length array of ulong elements
+    /// A variable length array of ulong elements.
+    /// Acts as an expandable array and/or a stack.
     /// Using an allocator and memory interface
     /// </summary>
     public class VariableVector : IGcContainer
@@ -97,7 +98,7 @@
         }
 
         /// <summary>
-        /// Remove the last item from the vector, returning it's value
+        /// Remove the last item from the vector, returning its value
         /// </summary>
         public ulong Pop()
         {
@@ -107,13 +108,49 @@
             // Figure out what chunk we should be in:
             var chunkIdx = index / ELEMS_PER_CHUNK;
             var entryIdx = index % ELEMS_PER_CHUNK;
-            if (chunkIdx > 0 && entryIdx == 0) // dealloc last chunk
-            {
 
+            // Walk through the chunk chain
+            var chunkHeadPtr = _baseChunkTable;
+            var chunkPrev = _baseChunkTable;
+            for (int i = 0; i < chunkIdx; i++)
+            {
+                chunkPrev = chunkHeadPtr;
+                chunkHeadPtr = _mem.Read<long>(chunkHeadPtr);
+                if (chunkHeadPtr <= 0) return 0UL; // bad chunk table
+            }
+            
+            // Get the value
+            var result = _mem.Read<ulong>(chunkHeadPtr + ELEM_SIZE + (ELEM_SIZE * entryIdx));
+
+            // If we've removed the only entry in a chunk,
+            if (chunkIdx > 0 && entryIdx == 0)
+            {
+                // dealloc last chunk
+                _alloc.Deref(chunkHeadPtr);
+                _mem.Write<long>(chunkPrev, -1); // drop pointer
             }
 
             _elementCount--;
-            return 0;
+            return result;
+        }
+
+        /// <summary>
+        /// Remove the entire vector from memory, including base pointers.
+        /// After calling this, the vector will not be usable
+        /// </summary>
+        public void Deallocate()
+        {
+            // Walk through the chunk chain, removing until we hit an invalid pointer
+            var current = _baseChunkTable;
+            while(true)
+            {
+                var next = _mem.Read<long>(current);
+                _alloc.Deref(current);
+                _mem.Write<long>(current, -1); // just in case we have a loop
+                if (next <= 0) return; // end of chunks
+                current = next;
+            }
+            
         }
     }
 }
