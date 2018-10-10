@@ -3,23 +3,24 @@
     /// <summary>
     /// A variable length array of ulong elements.
     /// Acts as an expandable array and/or a stack.
-    /// Using an allocator and memory interface
+    /// Uses an allocator and memory interface
     /// </summary>
-    public class VariableVector : IGcContainer
+    public class VariableTagVector : IGcContainer
     {
         public const int ELEMS_PER_CHUNK = 32;
         public const int ELEM_SIZE = sizeof(ulong);
         public const int CHUNK_BYTES = (1 + ELEMS_PER_CHUNK) * ELEM_SIZE;
 
         private readonly Allocator _alloc;
-        private readonly MemorySimulator _mem;
+        private readonly IMemoryAccess _mem;
         private readonly long _baseChunkTable;
         private int _elementCount;
 
         /// <summary>
+        /// A variable length array of ulong elements.
         /// Create a new vector base in the first free section
         /// </summary>
-        public VariableVector(Allocator alloc, MemorySimulator mem)
+        public VariableTagVector(Allocator alloc, IMemoryAccess mem)
         {
             _alloc = alloc;
             _mem = mem;

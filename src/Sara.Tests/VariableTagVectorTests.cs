@@ -4,11 +4,11 @@ using NUnit.Framework;
 namespace Sara.Tests
 {
     [TestFixture]
-    public class VariableVectorTests {
+    public class VariableTagVectorTests {
         [Test]
         public void can_store_and_read_array_elements ()
         {
-            var subject = new VariableVector(new Allocator(0, Mega.Bytes(1)), new MemorySimulator(Mega.Bytes(1)));
+            var subject = new VariableTagVector(new Allocator(0, Mega.Bytes(1)), new MemorySimulator(Mega.Bytes(1)));
 
             Assert.That(subject.Length(), Is.Zero);
 
@@ -26,7 +26,7 @@ namespace Sara.Tests
         public void can_create_a_vector_larger_than_the_arena_limit()
         {
             var memsize = Mega.Bytes(1);
-            var subject = new VariableVector(new Allocator(0, memsize), new MemorySimulator(memsize));
+            var subject = new VariableTagVector(new Allocator(0, memsize), new MemorySimulator(memsize));
 
             int full = (int) (Allocator.ArenaSize / sizeof(long)) * 2;
 
@@ -46,7 +46,7 @@ namespace Sara.Tests
         [Test]
         public void popping_the_last_item_from_a_list_gives_its_value ()
         {
-            var subject = new VariableVector(new Allocator(0, Mega.Bytes(1)), new MemorySimulator(Mega.Bytes(1)));
+            var subject = new VariableTagVector(new Allocator(0, Mega.Bytes(1)), new MemorySimulator(Mega.Bytes(1)));
 
             Assert.That(subject.Length(), Is.Zero);
 
@@ -66,7 +66,7 @@ namespace Sara.Tests
             // Setup, and allocate a load of entries
             var memsize = Mega.Bytes(1);
             var alloc = new Allocator(0, memsize);
-            var subject = new VariableVector(alloc, new MemorySimulator(memsize));
+            var subject = new VariableTagVector(alloc, new MemorySimulator(memsize));
 
             int full = (int) (Allocator.ArenaSize / sizeof(long)) * 2;
 
@@ -104,7 +104,7 @@ namespace Sara.Tests
             // Setup, and allocate a load of entries
             var memsize = Mega.Bytes(1);
             var alloc = new Allocator(0, memsize);
-            var subject = new VariableVector(alloc, new MemorySimulator(memsize));
+            var subject = new VariableTagVector(alloc, new MemorySimulator(memsize));
 
             int full = (int) (Allocator.ArenaSize / sizeof(long)) * 2;
 
@@ -127,7 +127,7 @@ namespace Sara.Tests
         [Test]
         public void can_add_elements_after_removing_them ()
         {
-            var subject = new VariableVector(new Allocator(0, Mega.Bytes(1)), new MemorySimulator(Mega.Bytes(1)));
+            var subject = new VariableTagVector(new Allocator(0, Mega.Bytes(1)), new MemorySimulator(Mega.Bytes(1)));
 
             Assert.That(subject.Length(), Is.Zero);
 

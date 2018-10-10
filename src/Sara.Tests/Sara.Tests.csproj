@@ -47,7 +47,8 @@
     <Compile Include="AllocatorTests.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="MemorySimulatorTests.cs" />
-    <Compile Include="VariableVectorTests.cs" />
+    <Compile Include="VariableContainerVectorTests.cs" />
+    <Compile Include="VariableTagVectorTests.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

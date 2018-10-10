@@ -35,8 +35,6 @@
     /// </summary>
     public class TaggedHashMap
     {
-        private const float LOAD_FACTOR = 0.86f;
-        private const uint SAFE_HASH = 0x80000000; // just in case you get a zero result
 
         public virtual bool KeyComparer(TKey a, TKey b) {
             // User should provide comparison.
@@ -55,36 +53,31 @@
             }
         }
 
+
+        private const float LOAD_FACTOR = 0.86f;
+        private const uint SAFE_HASH = 0x80000000; // just in case you get a zero result
+
         private Entry[] buckets;
         private uint count;
         private uint countMod;
         private uint countUsed;
         private uint growAt;
         private uint shrinkAt;
+        private readonly Allocator _alloc;
+        private readonly IMemoryAccess _mem;
 
-        public TaggedHashMap(uint size)
+        /// <summary>
+        /// Create a new hash map
+        /// </summary>
+        /// <param name="size">Initial size</param>
+        /// <param name="alloc">Memory allocator</param>
+        /// <param name="mem">Memory access</param>
+        public TaggedHashMap(uint size, Allocator alloc, IMemoryAccess mem)
         {
+            _alloc = alloc;
+            _mem = mem;
             Resize(NextPow2(size), false);
             Clear();
-        }
-
-        private KVP[] Entries
-        {
-            get
-            {
-                var size = 0;
-                for (uint i = 0; i < count; i++) if (buckets[i].hash != 0) size++;
-
-                var result = new KVP[size];
-                int j = 0;
-
-                for (uint i = 0; i < count; i++){
-                    if (buckets[i].hash == 0) continue;
-                    result[j] = new KVP(buckets[i].key, buckets[i].value);
-                    j++;
-                }
-                return result;
-            }
         }
 
         private void Resize(uint newSize, bool auto = true)
@@ -121,11 +114,11 @@
                 return true;
             }
 
-            value = default(TValue);
+            value = default;
             return false;
         }
 
-        private bool Put(TKey key, TValue val, bool canReplace)
+        public bool Put(TKey key, TValue val, bool canReplace)
         {
             //if (key == null) return false;
                 //throw new ArgumentNullException(nameof(key));
@@ -264,6 +257,23 @@
             first = second;
             second = temp;
         }
+        
+        public KVP[] AllEntries()
+        {
+            var size = 0;
+            for (uint i = 0; i < count; i++) if (buckets[i].hash != 0) size++;
+
+            var result = new KVP[size];
+            int j = 0;
+
+            for (uint i = 0; i < count; i++)
+            {
+                if (buckets[i].hash == 0) continue;
+                result[j] = new KVP(buckets[i].key, buckets[i].value);
+                j++;
+            }
+            return result;
+        }
 
         public void Add(TKey key, TValue value)
         {
@@ -283,19 +293,6 @@
         public bool TryGetValue(TKey key, out TValue value)
         {
             return Get(key, out value);
-        }
-
-        public TValue this[TKey key]
-        {
-            get
-            {
-                TValue result;
-                if (!Get(key, out result)) return default;
-                    //throw new KeyNotFoundException(key.ToString()); // TODO: error propagation
-
-                return result;
-            }
-            set { Put(key, value, true); }
         }
 
         public void Clear()

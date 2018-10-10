@@ -5,7 +5,7 @@ namespace Sara
     /// <summary>
     /// Behaves like raw memory access, for simulating embedded systems
     /// </summary>
-    public class MemorySimulator
+    public class MemorySimulator : IMemoryAccess
     {
         private readonly byte[] _data;
 
