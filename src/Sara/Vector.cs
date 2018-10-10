@@ -6,7 +6,7 @@
     /// Uses an allocator and memory interface
     /// </summary>
     /// <typeparam name="TElement">A simple type</typeparam>
-    public class VariableContainerVector<TElement> where TElement: unmanaged 
+    public class Vector<TElement> where TElement: unmanaged 
     {
         public readonly int ElemsPerChunk;
         public readonly int ElementByteSize;
@@ -22,7 +22,7 @@
         /// A variable length array of variable elements.
         /// Create a new vector base in the first free section
         /// </summary>
-        public VariableContainerVector(Allocator alloc, IMemoryAccess mem)
+        public Vector(Allocator alloc, IMemoryAccess mem)
         {
             _alloc = alloc;
             _mem = mem;
@@ -90,7 +90,7 @@
         /// <summary>
         /// Get item at zero-based index
         /// </summary>
-        public TElement Get(int index)
+        public TElement Get(uint index)
         {
             if (index >= _elementCount) return default; // TODO: some kind of failure flag. No using exceptions
 
@@ -164,6 +164,44 @@
                 current = next;
             }
             
+        }
+
+        /// <summary>
+        /// Set a value at a given index.
+        /// Ignored if out-of-bounds
+        /// </summary>
+        public void Set(uint index, TElement element)
+        {
+            if (index >= _elementCount) return; // TODO: some kind of failure flag. No using exceptions
+
+            // Figure out what chunk we should be in:
+            var chunkIdx = index / ElemsPerChunk;
+            var entryIdx = index % ElemsPerChunk;
+
+            // Walk through the chunk chain
+            var chunkHeadPtr = _baseChunkTable;
+            for (int i = 0; i < chunkIdx; i++)
+            {
+                chunkHeadPtr = _mem.Read<long>(chunkHeadPtr);
+                if (chunkHeadPtr <= 0) return; // bad chunk table
+            }
+
+            // push in the value
+            _mem.Write(chunkHeadPtr + PtrSize + (ElementByteSize * entryIdx), element);
+        }
+
+        /// <summary>
+        /// Ensure the vector is at least the given length.
+        /// Any additional slots are filled with the given element.
+        /// If the array is longer or equal, no changes are made.
+        /// </summary>
+        public void Prealloc(uint length, TElement element)
+        {
+            var remain = length - _elementCount;
+            for (int i = 0; i < remain; i++)
+            {
+                Push(element); // could probably be optimised. This will scan multiple times.
+            }
         }
     }
 }

@@ -18,7 +18,7 @@ namespace Sara.Tests
         [Test]
         public void can_store_and_read_array_elements ()
         {
-            var subject = new VariableContainerVector<SampleElement>(new Allocator(0, Mega.Bytes(1)), new MemorySimulator(Mega.Bytes(1)));
+            var subject = new Vector<SampleElement>(new Allocator(0, Mega.Bytes(1)), new MemorySimulator(Mega.Bytes(1)));
 
             Assert.That(subject.Length(), Is.Zero);
 
@@ -36,9 +36,9 @@ namespace Sara.Tests
         public void can_create_a_vector_larger_than_the_arena_limit()
         {
             var memsize = Mega.Bytes(1);
-            var subject = new VariableContainerVector<SampleElement>(new Allocator(0, memsize), new MemorySimulator(memsize));
+            var subject = new Vector<SampleElement>(new Allocator(0, memsize), new MemorySimulator(memsize));
 
-            int full = (int) (Allocator.ArenaSize / sizeof(long)) * 2;
+            uint full = (uint) (Allocator.ArenaSize / sizeof(long)) * 2;
 
             var expected = (full * 8) + ((full / 32) * 8);
             Console.WriteLine("Expecting to allocate " + expected);
@@ -56,7 +56,7 @@ namespace Sara.Tests
         [Test]
         public void popping_the_last_item_from_a_list_gives_its_value ()
         {
-            var subject = new VariableContainerVector<SampleElement>(new Allocator(0, Mega.Bytes(1)), new MemorySimulator(Mega.Bytes(1)));
+            var subject = new Vector<SampleElement>(new Allocator(0, Mega.Bytes(1)), new MemorySimulator(Mega.Bytes(1)));
 
             Assert.That(subject.Length(), Is.Zero);
 
@@ -76,7 +76,7 @@ namespace Sara.Tests
             // Setup, and allocate a load of entries
             var memsize = Mega.Bytes(1);
             var alloc = new Allocator(0, memsize);
-            var subject = new VariableContainerVector<SampleElement>(alloc, new MemorySimulator(memsize));
+            var subject = new Vector<SampleElement>(alloc, new MemorySimulator(memsize));
 
             int full = (int) (Allocator.ArenaSize / sizeof(long)) * 2;
 
@@ -114,7 +114,7 @@ namespace Sara.Tests
             // Setup, and allocate a load of entries
             var memsize = Mega.Bytes(1);
             var alloc = new Allocator(0, memsize);
-            var subject = new VariableContainerVector<SampleElement>(alloc, new MemorySimulator(memsize));
+            var subject = new Vector<SampleElement>(alloc, new MemorySimulator(memsize));
 
             int full = (int) (Allocator.ArenaSize / sizeof(long)) * 2;
 
@@ -137,7 +137,7 @@ namespace Sara.Tests
         [Test]
         public void can_add_elements_after_removing_them ()
         {
-            var subject = new VariableContainerVector<SampleElement>(new Allocator(0, Mega.Bytes(1)), new MemorySimulator(Mega.Bytes(1)));
+            var subject = new Vector<SampleElement>(new Allocator(0, Mega.Bytes(1)), new MemorySimulator(Mega.Bytes(1)));
 
             Assert.That(subject.Length(), Is.Zero);
 
@@ -151,6 +151,42 @@ namespace Sara.Tests
 
             Assert.That(subject.Get(0), Is.EqualTo(Sample1()));
             Assert.That(subject.Get(1), Is.EqualTo(Sample3()));
+        }
+
+        [Test]
+        public void can_overwrite_entries_by_explicit_index ()
+        {
+            var subject = new Vector<SampleElement>(new Allocator(0, Mega.Bytes(1)), new MemorySimulator(Mega.Bytes(1)));
+
+            Assert.That(subject.Length(), Is.Zero);
+
+            subject.Push(Sample1());
+            subject.Push(Sample2());
+
+            Assert.That(subject.Length(), Is.EqualTo(2));
+            
+            subject.Set(0, Sample3());
+
+            Assert.That(subject.Get(0), Is.EqualTo(Sample3()));
+            Assert.That(subject.Get(1), Is.EqualTo(Sample2()));
+        }
+
+        [Test]
+        public void can_preallocate_space_in_the_vector ()
+        {
+            var subject = new Vector<SampleElement>(new Allocator(0, Mega.Bytes(1)), new MemorySimulator(Mega.Bytes(1)));
+
+            Assert.That(subject.Length(), Is.Zero);
+
+            subject.Prealloc(20, Sample1());
+            subject.Set(10, Sample3());
+
+            Assert.That(subject.Length(), Is.EqualTo(20));
+
+            Assert.That(subject.Get(0), Is.EqualTo(Sample1()));
+            Assert.That(subject.Get(19), Is.EqualTo(Sample1()));
+
+            Assert.That(subject.Get(10), Is.EqualTo(Sample3()));
         }
     }
 }

@@ -57,7 +57,7 @@
         private const float LOAD_FACTOR = 0.86f;
         private const uint SAFE_HASH = 0x80000000; // just in case you get a zero result
 
-        private Entry[] buckets;
+        private Vector<Entry> buckets;
         private uint count;
         private uint countMod;
         private uint countUsed;
@@ -77,7 +77,6 @@
             _alloc = alloc;
             _mem = mem;
             Resize(NextPow2(size), false);
-            Clear();
         }
 
         private void Resize(uint newSize, bool auto = true)
@@ -87,22 +86,25 @@
 
             count = newSize;
             countMod = newSize - 1;
-            buckets = new Entry[newSize];
+            //buckets = new Entry[newSize];
+            buckets = new Vector<Entry>(_alloc, _mem);
+            buckets.Prealloc(newSize, default(Entry));
 
             growAt = auto ? (uint)(newSize*LOAD_FACTOR) : newSize;
             shrinkAt = auto ? newSize >> 2 : 0;
 
-            if ((countUsed > 0) && (newSize != 0))
+            if ((countUsed > 0) && (newSize != 0) && oldBuckets != null)
             {
                 //Debug.Assert(countUsed <= newSize);
                 //Debug.Assert(oldBuckets != null);
 
                 countUsed = 0;
 
-                for (uint i = 0; i < oldCount; i++)
-                    if (oldBuckets[i].hash != 0)
-                        PutInternal(oldBuckets[i], false, false);
+                for (uint i = 0; i < oldCount; i++) if (oldBuckets.Get(i).hash != 0) PutInternal(oldBuckets.Get(i), false, false);
+
+                oldBuckets.Deallocate();
             }
+
         }
 
         private bool Get(TKey key, out TValue value)
@@ -110,7 +112,7 @@
             uint index;
             if (Find(key, out index))
             {
-                value = buckets[index].value;
+                value = buckets.Get(index).value;
                 return true;
             }
 
@@ -137,20 +139,20 @@
             {
                 var
                     indexCurrent = (indexInit + i) & countMod;
-                if (buckets[indexCurrent].hash == 0)
+                if (buckets.Get(indexCurrent).hash == 0)
                 {
                     countUsed++;
-                    buckets[indexCurrent] = entry;
+                    buckets.Set(indexCurrent, entry);
                     return true;
                 }
 
-                if (checkDuplicates && (entry.hash == buckets[indexCurrent].hash) &&
-                    KeyComparer(entry.key, buckets[indexCurrent].key))
+                if (checkDuplicates && (entry.hash == buckets.Get(indexCurrent).hash) &&
+                    KeyComparer(entry.key, buckets.Get(indexCurrent).key))
                 {
                     if (!canReplace) return false; // TODO: error propagation
-                        //throw new ArgumentException("An entry with the same key already exists", nameof(entry.key));
+                                                   //throw new ArgumentException("An entry with the same key already exists", nameof(entry.key));
 
-                    buckets[indexCurrent] = entry;
+                    buckets.Set(indexCurrent, entry);
                     return true;
                 }
 
@@ -159,7 +161,7 @@
                 if (probeCurrent > probeDistance)
                 {
                     probeCurrent = probeDistance;
-                    Swap(ref buckets[indexCurrent], ref entry);
+                    Swap(buckets,indexCurrent, ref entry); // needs reworking
                 }
                 probeCurrent++;
             }
@@ -184,10 +186,10 @@
                 {
                     index = (indexInit + i) & countMod;
 
-                    if ((hash == buckets[index].hash) && KeyComparer(key, buckets[index].key))
+                    if ((hash == buckets.Get(index).hash) && KeyComparer(key, buckets.Get(index).key))
                         return true;
 
-                    if (buckets[index].hash != 0)
+                    if (buckets.Get(index).hash != 0)
                         probeDistance = DistanceToInitIndex(index);
 
                     if (i > probeDistance)
@@ -208,9 +210,9 @@
                     var curIndex = (index + i) & countMod;
                     var nextIndex = (index + i + 1) & countMod;
 
-                    if ((buckets[nextIndex].hash == 0) || (DistanceToInitIndex(nextIndex) == 0))
+                    if ((buckets.Get(nextIndex).hash == 0) || (DistanceToInitIndex(nextIndex) == 0))
                     {
-                        buckets[curIndex] = default;
+                        buckets.Set(curIndex, default);
 
                         if (--countUsed == shrinkAt)
                             Resize(shrinkAt);
@@ -218,7 +220,7 @@
                         return true;
                     }
 
-                    Swap(ref buckets[curIndex], ref buckets[nextIndex]);
+                    Swap(buckets, curIndex, nextIndex);
                 }
             }
 
@@ -229,7 +231,7 @@
         {
             //Debug.Assert(buckets[indexStored].hash != 0);
 
-            var indexInit = buckets[indexStored].hash & countMod;
+            var indexInit = buckets.Get(indexStored).hash & countMod;
             if (indexInit <= indexStored)
                 return indexStored - indexInit;
             return indexStored + (count - indexInit);
@@ -250,26 +252,41 @@
             c |= c >> 16;
             return ++c;
         }
+        
 
-        private static void Swap<T>(ref T first, ref T second)
-        {
-            var temp = first;
-            first = second;
-            second = temp;
+        /// <summary>
+        /// Swap a vector entry with an external value
+        /// </summary>
+        private void Swap(Vector<Entry> vec, uint idx, ref Entry newEntry) {
+            var temp = vec.Get(idx);
+            vec.Set(idx, newEntry);
+            newEntry = temp;
+        }
+        
+        /// <summary>
+        /// Swap two vector entries
+        /// </summary>
+        private void Swap(Vector<Entry> vec, uint idx1, uint idx2) {
+            // TODO: could optimise this with a 'swap' in vector<T>
+            var temp = vec.Get(idx1);
+            vec.Set(idx1, vec.Get(idx2));
+            vec.Set(idx2, temp);
         }
         
         public KVP[] AllEntries()
         {
             var size = 0;
-            for (uint i = 0; i < count; i++) if (buckets[i].hash != 0) size++;
+            for (uint i = 0; i < count; i++) if (buckets.Get(i).hash != 0) size++;
 
             var result = new KVP[size];
             int j = 0;
 
             for (uint i = 0; i < count; i++)
             {
-                if (buckets[i].hash == 0) continue;
-                result[j] = new KVP(buckets[i].key, buckets[i].value);
+                var ent = buckets.Get(i);
+                if (ent.hash == 0) continue;
+
+                result[j] = new KVP(ent.key, ent.value);
                 j++;
             }
             return result;
