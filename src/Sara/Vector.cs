@@ -3,11 +3,13 @@
     /// <summary>
     /// A variable length array of variable elements.
     /// Acts as an expandable array and/or a stack.
-    /// Uses an allocator and memory interface
+    /// Uses an allocator and memory interface. Internally, it's a skip list.
     /// </summary>
-    /// <typeparam name="TElement">A simple type</typeparam>
+    /// <typeparam name="TElement">A simple type that can be serialised to a byte array</typeparam>
     public class Vector<TElement> where TElement: unmanaged 
     {
+        public const int TARGET_ELEMS_PER_CHUNK = 64; // Bigger = faster, but more wasteful on small arrays
+
         public readonly int ElemsPerChunk;
         public readonly int ElementByteSize;
         public readonly int PtrSize;
@@ -38,7 +40,8 @@
             ElemsPerChunk = (int)(spaceForElements / ElementByteSize);
 
             //if (ELEMS_PER_CHUNK <= 1) // TODO: error condition propagation.
-            if (ElemsPerChunk > 32) ElemsPerChunk = 32; // no need to go crazy with small items.
+            if (ElemsPerChunk > TARGET_ELEMS_PER_CHUNK)
+                ElemsPerChunk = TARGET_ELEMS_PER_CHUNK; // no need to go crazy with small items.
 
             ChunkBytes = PtrSize + (ElemsPerChunk * ElementByteSize);
 
@@ -51,6 +54,7 @@
         private long NewChunk()
         {
             var ptr = _alloc.Alloc(ChunkBytes);
+            /**/if (ptr < 0) return ptr; //TODO: handle failure
             _mem.Write<long>(ptr, -1); // need to make sure the continuation pointer is invalid
             return ptr;
         }
@@ -190,6 +194,30 @@
             _mem.Write(chunkHeadPtr + PtrSize + (ElementByteSize * entryIdx), element);
         }
 
+        
+        /// <summary>
+        /// Get a pointer for an index
+        /// </summary>
+        protected long PtrOfElem(uint index)
+        {
+            if (index >= _elementCount) return -1; // TODO: some kind of failure flag. No using exceptions
+
+            // Figure out what chunk we should be in:
+            var chunkIdx = index / ElemsPerChunk;
+            var entryIdx = index % ElemsPerChunk;
+
+            // Walk through the chunk chain
+            var chunkHeadPtr = _baseChunkTable;
+            for (int i = 0; i < chunkIdx; i++)
+            {
+                chunkHeadPtr = _mem.Read<long>(chunkHeadPtr);
+                if (chunkHeadPtr <= 0) return -1; // bad chunk table
+            }
+
+            // push in the value
+            return chunkHeadPtr + PtrSize + (ElementByteSize * entryIdx);
+        }
+
         /// <summary>
         /// Ensure the vector is at least the given length.
         /// Any additional slots are filled with the given element.
@@ -202,6 +230,23 @@
             {
                 Push(element); // could probably be optimised. This will scan multiple times.
             }
+        }
+
+        /// <summary>
+        /// Swap two elements by index.
+        /// </summary>
+        /// <param name="index1"></param>
+        /// <param name="index2"></param>
+        public void Swap(uint index1, uint index2)
+        {
+            long ptrA = PtrOfElem(index1);
+            long ptrB = PtrOfElem(index2);
+
+            var valA = _mem.Read<TElement>(ptrA);
+            var valB = _mem.Read<TElement>(ptrB);
+
+            _mem.Write(ptrA, valB);
+            _mem.Write(ptrB, valA);
         }
     }
 }

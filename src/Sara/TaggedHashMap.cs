@@ -54,7 +54,7 @@
         }
 
 
-        private const float LOAD_FACTOR = 0.86f;
+        private const float LOAD_FACTOR = 0.6f; // higher is more memory efficient. Lower is faster, to a point.
         private const uint SAFE_HASH = 0x80000000; // just in case you get a zero result
 
         private Vector<Entry> buckets;
@@ -267,10 +267,7 @@
         /// Swap two vector entries
         /// </summary>
         private void Swap(Vector<Entry> vec, uint idx1, uint idx2) {
-            // TODO: could optimise this with a 'swap' in vector<T>
-            var temp = vec.Get(idx1);
-            vec.Set(idx1, vec.Get(idx2));
-            vec.Set(idx2, temp);
+            vec.Swap(idx1, idx2);
         }
         
         public KVP[] AllEntries()

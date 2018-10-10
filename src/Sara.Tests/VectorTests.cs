@@ -4,11 +4,7 @@ using NUnit.Framework;
 namespace Sara.Tests
 {
     [TestFixture]
-    public class VariableContainerVectorTests {
-        public struct SampleElement {
-            public int a;
-            public double b;
-        }
+    public class VectorTests {
 
         public SampleElement Sample1() { return new SampleElement { a = 1, b = 1.1 }; }
         public SampleElement Sample2() { return new SampleElement { a = 2, b = 2.2 }; }
@@ -187,6 +183,85 @@ namespace Sara.Tests
             Assert.That(subject.Get(19), Is.EqualTo(Sample1()));
 
             Assert.That(subject.Get(10), Is.EqualTo(Sample3()));
+        }
+
+        [Test]
+        public void elements_per_chunk_is_reasonable ()
+        {
+            Console.WriteLine(Allocator.ArenaSize);
+
+            var structVector = new Vector<SampleElement>(new Allocator(0, Kilo.Bytes(80)), new MemorySimulator(Kilo.Bytes(80)));
+            var bigStructVector = new Vector<HugeStruct>(new Allocator(0, Kilo.Bytes(80)), new MemorySimulator(Kilo.Bytes(80)));
+            var byteVector = new Vector<byte>(new Allocator(0, Kilo.Bytes(80)), new MemorySimulator(Kilo.Bytes(80)));
+
+            Assert.That(byteVector.ElemsPerChunk, Is.EqualTo(64));   // Not too big on small elements
+            Assert.That(structVector.ElemsPerChunk, Is.EqualTo(64));
+            Assert.That(bigStructVector.ElemsPerChunk, Is.LessThan(32)); // scales down to fit arenas
+        }
+
+        [Test]
+        public void can_swap_two_elements_by_index ()
+        {
+            var subject = new Vector<SampleElement>(new Allocator(0, Mega.Bytes(1)), new MemorySimulator(Mega.Bytes(1)));
+            
+            uint length = (uint) (subject.ElemsPerChunk * 2);
+
+            subject.Prealloc(length, Sample1());
+            var end = length - 1;
+
+            subject.Set(1, Sample3());
+            subject.Set(end, Sample2());
+
+            Assert.That(subject.Length(), Is.EqualTo(length), "Wrong length");
+            Assert.That(subject.Get(1), Is.EqualTo(Sample3()), "Wrong initial element at start");
+            Assert.That(subject.Get(end), Is.EqualTo(Sample2()), "Wrong initial element at end");
+
+            // the main event:
+            subject.Swap(1, end);
+
+
+            Assert.That(subject.Get(1), Is.EqualTo(Sample2()), "Wrong final element at start");
+            Assert.That(subject.Get(end), Is.EqualTo(Sample3()), "Wrong final element at end");
+        }
+
+        
+        public struct SampleElement {
+            public int a;
+            public double b;
+        }
+        public struct HugeStruct {
+            public ReallyBigStruct a;
+            public ReallyBigStruct b;
+            public ReallyBigStruct c;
+        }
+        public struct ReallyBigStruct {
+            public BigStruct a;
+            public BigStruct b;
+            public BigStruct c;
+            public BigStruct d;
+            public BigStruct e;
+            public BigStruct f;
+            public BigStruct a2;
+            public BigStruct b2;
+            public BigStruct c2;
+            public BigStruct d2;
+            public BigStruct e2;
+            public BigStruct f2;
+        }
+        public struct BigStruct {
+            public double a;
+            public double b;
+            public double c;
+            public double d;
+            public double e;
+            public double f;
+            public double g;
+            public double h;
+            public double i;
+            public double j;
+            public double k;
+            public double l;
+            public double m;
         }
     }
 }
