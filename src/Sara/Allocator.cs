@@ -200,5 +200,38 @@
                 }
             }
         }
+
+        /// <summary>
+        /// Scan the arena meta-data to read the current allocation state
+        /// </summary>
+        /// <param name="allocatedBytes">Sum of all bytes that are claimed.</param>
+        /// <param name="unallocatedBytes">Sum of all bytes that are not yet allocated. This counts all fragments together.</param>
+        /// <param name="occupiedArenas">Number of arenas with at least some </param>
+        /// <param name="emptyArenas">Number of arenas with no allocations</param>
+        /// <param name="totalReferenceCount">Number of claimed references across all arenas</param>
+        /// <param name="largestContiguous">The largest block that can be allocated</param>
+        public void GetState(out long allocatedBytes, out long unallocatedBytes, out long occupiedArenas, out long emptyArenas, out long totalReferenceCount, out long largestContiguous)
+        {
+            allocatedBytes = 0;
+            unallocatedBytes = 0;
+            occupiedArenas = 0;
+            emptyArenas = 0;
+            totalReferenceCount = 0;
+            largestContiguous = 0;
+
+            for (int i = 0; i < _arenaCount; i++)
+            {
+                var arena = _meta[i];
+                totalReferenceCount += arena.RefCount;
+
+                if (arena.Head > 0) occupiedArenas++;
+                else emptyArenas++;
+
+                var free = ArenaSize - arena.Head;
+                allocatedBytes += arena.Head;
+                unallocatedBytes += free;
+                if (free > largestContiguous) largestContiguous = free;
+            }
+        }
     }
 }

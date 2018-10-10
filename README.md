@@ -14,3 +14,7 @@ Expecting quite high fragmentation. Maybe certain subsets of arenas for smaller 
 * [ ] Variable array/vector
 * [ ] GC scanning
 * [ ] Hash table
+
+## Maybe:
+* [ ] Tag arenas with owner scope? Multiple arenas per scope, but only one scope per arena? (how would that work with recursion?)
+      -> (could also tag things up per-function, which might make leaking easier to trace?)

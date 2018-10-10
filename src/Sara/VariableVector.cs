@@ -49,7 +49,7 @@
         /// <summary>
         /// Add element to the end of the list
         /// </summary>
-        public void Add(ulong value)
+        public void Push(ulong value)
         {
             var newChunkIdx = _elementCount / ELEMS_PER_CHUNK;
             var entryIdx = _elementCount % ELEMS_PER_CHUNK;
@@ -94,6 +94,26 @@
 
             // pull out the value
             return _mem.Read<ulong>(chunkHeadPtr + ELEM_SIZE + (ELEM_SIZE * entryIdx));
+        }
+
+        /// <summary>
+        /// Remove the last item from the vector, returning it's value
+        /// </summary>
+        public ulong Pop()
+        {
+            var index = _elementCount - 1;
+            // Walk to find the chunk; if it's the FIRST entry in NOT-the-first chunk, dealloc the chunk and write to the prev.
+
+            // Figure out what chunk we should be in:
+            var chunkIdx = index / ELEMS_PER_CHUNK;
+            var entryIdx = index % ELEMS_PER_CHUNK;
+            if (chunkIdx > 0 && entryIdx == 0) // dealloc last chunk
+            {
+
+            }
+
+            _elementCount--;
+            return 0;
         }
     }
 }

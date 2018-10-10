@@ -197,7 +197,7 @@ namespace Sara.Tests
         [Test]
         public void memory_exhaustion_results_in_an_error_code ()
         {
-            var subject = new Allocator(10, Mega.Bytes(1)); // big for an embedded system. 3GB total.
+            var subject = new Allocator(10, Mega.Bytes(1));
 
             long result = 0;
 
@@ -233,8 +233,38 @@ namespace Sara.Tests
         [Test]
         public void can_read_the_current_allocation_pressure ()
         {
-            // free memory, # arenas clear, # arenas somewhat used
-            Assert.Inconclusive();
+            var subject = new Allocator(10, Mega.Bytes(1)); // this is 1048576, which doesn't divide nicely into arenas...
+
+            // Check the empty state is sane
+            subject.GetState(out var allocatedBytes, out var unallocatedBytes, out var occupiedArenas, out var emptyArenas, out var refCount, out var largestBlock);
+
+            Assert.That(allocatedBytes, Is.Zero);
+            Assert.That(unallocatedBytes, Is.EqualTo(1048560)); // ... so we end up with slightly less space that's usable. Max loss is 64K
+            Assert.That(largestBlock, Is.EqualTo(Allocator.ArenaSize));
+
+            Assert.That(occupiedArenas, Is.Zero);
+            Assert.That(emptyArenas, Is.EqualTo(16)); // arenas per megabyte
+            Assert.That(refCount, Is.Zero);
+
+            // Do some allocation
+            var allocd = 0L;
+            var size = Allocator.ArenaSize / 6;
+            for (int i = 0; i < 14; i++)
+            {
+                allocd += size;
+                subject.Alloc(size);
+            }
+
+            // Check filled state is sane
+            subject.GetState(out allocatedBytes, out unallocatedBytes, out occupiedArenas, out emptyArenas, out refCount, out largestBlock);
+
+            Assert.That(allocatedBytes, Is.EqualTo(allocd));
+            Assert.That(unallocatedBytes, Is.EqualTo(1048560 - allocd));
+            Assert.That(largestBlock, Is.EqualTo(Allocator.ArenaSize));
+
+            Assert.That(occupiedArenas, Is.EqualTo(3));
+            Assert.That(emptyArenas, Is.EqualTo(13));
+            Assert.That(refCount, Is.EqualTo(14));
         }
     }
 }
