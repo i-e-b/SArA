@@ -8,10 +8,10 @@
     /// <typeparam name="TElement">A simple type</typeparam>
     public class VariableContainerVector<TElement> where TElement: unmanaged 
     {
-        public readonly int ELEMS_PER_CHUNK;
-        public readonly int ELEM_SIZE;
-        public readonly int PTR_SIZE;
-        public readonly int CHUNK_BYTES;
+        public readonly int ElemsPerChunk;
+        public readonly int ElementByteSize;
+        public readonly int PtrSize;
+        public readonly int ChunkBytes;
 
         private readonly Allocator _alloc;
         private readonly IMemoryAccess _mem;
@@ -29,18 +29,18 @@
 
             unsafe
             {
-                ELEM_SIZE = sizeof(TElement);
+                ElementByteSize = sizeof(TElement);
             }
 
             // Work out how many elements can fit in an arena
-            PTR_SIZE = sizeof(long);
-            var spaceForElements = Allocator.ArenaSize - PTR_SIZE; // need pointer space
-            ELEMS_PER_CHUNK = (int)(spaceForElements / ELEM_SIZE);
+            PtrSize = sizeof(long);
+            var spaceForElements = Allocator.ArenaSize - PtrSize; // need pointer space
+            ElemsPerChunk = (int)(spaceForElements / ElementByteSize);
 
             //if (ELEMS_PER_CHUNK <= 1) // TODO: error condition propagation.
-            if (ELEMS_PER_CHUNK > 32) ELEMS_PER_CHUNK = 32; // no need to go crazy with small items.
+            if (ElemsPerChunk > 32) ElemsPerChunk = 32; // no need to go crazy with small items.
 
-            CHUNK_BYTES = PTR_SIZE + (ELEMS_PER_CHUNK * ELEM_SIZE);
+            ChunkBytes = PtrSize + (ElemsPerChunk * ElementByteSize);
 
             // We first make a table, which can store a few chunks, and can have a next-chunk-table pointer
             // Each chunk can hold a few elements.
@@ -50,14 +50,9 @@
 
         private long NewChunk()
         {
-            var ptr = _alloc.Alloc(CHUNK_BYTES);
+            var ptr = _alloc.Alloc(ChunkBytes);
             _mem.Write<long>(ptr, -1); // need to make sure the continuation pointer is invalid
             return ptr;
-        }
-
-        public long[] References()
-        {
-            return null;
         }
 
         public int Length()
@@ -70,8 +65,8 @@
         /// </summary>
         public void Push(TElement value)
         {
-            var newChunkIdx = _elementCount / ELEMS_PER_CHUNK;
-            var entryIdx = _elementCount % ELEMS_PER_CHUNK;
+            var newChunkIdx = _elementCount / ElemsPerChunk;
+            var entryIdx = _elementCount % ElemsPerChunk;
             
             // Walk through the chunk chain, adding where needed
             var chunkHeadPtr = _baseChunkTable;
@@ -87,7 +82,7 @@
             }
 
             // Write value
-            _mem.Write(chunkHeadPtr + PTR_SIZE + (ELEM_SIZE * entryIdx), value);
+            _mem.Write(chunkHeadPtr + PtrSize + (ElementByteSize * entryIdx), value);
 
             _elementCount++;
         }
@@ -100,8 +95,8 @@
             if (index >= _elementCount) return default; // TODO: some kind of failure flag. No using exceptions
 
             // Figure out what chunk we should be in:
-            var chunkIdx = index / ELEMS_PER_CHUNK;
-            var entryIdx = index % ELEMS_PER_CHUNK;
+            var chunkIdx = index / ElemsPerChunk;
+            var entryIdx = index % ElemsPerChunk;
 
             // Walk through the chunk chain
             var chunkHeadPtr = _baseChunkTable;
@@ -112,7 +107,7 @@
             }
 
             // pull out the value
-            return _mem.Read<TElement>(chunkHeadPtr + PTR_SIZE + (ELEM_SIZE * entryIdx));
+            return _mem.Read<TElement>(chunkHeadPtr + PtrSize + (ElementByteSize * entryIdx));
         }
 
         /// <summary>
@@ -124,8 +119,8 @@
             // Walk to find the chunk; if it's the FIRST entry in NOT-the-first chunk, dealloc the chunk and write to the prev.
 
             // Figure out what chunk we should be in:
-            var chunkIdx = index / ELEMS_PER_CHUNK;
-            var entryIdx = index % ELEMS_PER_CHUNK;
+            var chunkIdx = index / ElemsPerChunk;
+            var entryIdx = index % ElemsPerChunk;
 
             // Walk through the chunk chain
             var chunkHeadPtr = _baseChunkTable;
@@ -138,7 +133,7 @@
             }
             
             // Get the value
-            var result = _mem.Read<TElement>(chunkHeadPtr + PTR_SIZE + (ELEM_SIZE * entryIdx));
+            var result = _mem.Read<TElement>(chunkHeadPtr + PtrSize + (ElementByteSize * entryIdx));
 
             // If we've removed the only entry in a chunk,
             if (chunkIdx > 0 && entryIdx == 0)
