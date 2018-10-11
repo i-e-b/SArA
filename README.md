@@ -14,8 +14,8 @@ Expecting quite high fragmentation. Maybe certain subsets of arenas for smaller 
 * [x] Variable array/vector
 * [x] Generic variable vector (to help back hash table etc)
 * [x] Hash table
-* [ ] Proper result handling
-* [ ] GC scanning (might change if scope owners are added) -- including proper reference listing
+* [x] Proper result handling
+* [ ] GC scanning & reference listing
 
 ## Maybe:
 * [ ] Tag arenas with owner scope? Multiple arenas per scope, but only one scope per arena? (how would that work with recursion?)

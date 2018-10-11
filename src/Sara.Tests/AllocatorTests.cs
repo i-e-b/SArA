@@ -10,7 +10,7 @@ namespace Sara.Tests
         {
             var subject = new Allocator(100, Mega.Bytes(10));
 
-            long ptr = subject.Alloc(byteCount: Kilo.Bytes(1));
+            long ptr = subject.Alloc(byteCount: Kilo.Bytes(1)).Value;
 
             Assert.That(ptr, Is.GreaterThanOrEqualTo(100));
         }
@@ -20,8 +20,8 @@ namespace Sara.Tests
         {
             var subject = new Allocator(100, Mega.Bytes(10));
 
-            long ptr1 = subject.Alloc(byteCount: 256);
-            long ptr2 = subject.Alloc(byteCount: 256);
+            long ptr1 = subject.Alloc(byteCount: 256).Value;
+            long ptr2 = subject.Alloc(byteCount: 256).Value;
 
             Assert.That(ptr1, Is.Not.EqualTo(ptr2));
         }
@@ -31,28 +31,14 @@ namespace Sara.Tests
         {
             var subject = new Allocator(100, Mega.Bytes(10));
 
-            long ptr = subject.Alloc(byteCount: 256);
+            long ptr = subject.Alloc(byteCount: 256).Value;
             subject.Deref(ptr);
 
             var ar = subject.CurrentArena();
             var refs = subject.ArenaRefCount(ar);
 
-            Assert.That(refs, Is.Zero);
+            Assert.That(refs.Value, Is.Zero);
         }
-
-        /* This requires implementing back-step logic -- which I might do at some point
-        [Test]
-        public void deallocating_the_most_recently_allocated_block_returns_the_same_pointer()
-        {
-            // Each arena acts a bit like a stack
-            var subject = new Allocator(100, Mega.Bytes(10));
-
-            long ptr1 = subject.Alloc(byteCount: 256);
-            subject.Deref(ptr1);
-            long ptr2 = subject.Alloc(byteCount: 512);
-            
-            Assert.That(ptr1, Is.EqualTo(ptr2));
-        }*/
 
         [Test]
         public void deallocating_an_old_allocation_does_nothing ()
@@ -60,10 +46,10 @@ namespace Sara.Tests
             // Older items just hang around until the entire arena is abandoned
             var subject = new Allocator(100, Mega.Bytes(10));
 
-            long ptr1 = subject.Alloc(byteCount: 256);
-            long ptr2 = subject.Alloc(byteCount: 256);
+            long ptr1 = subject.Alloc(byteCount: 256).Value;
+            long ptr2 = subject.Alloc(byteCount: 256).Value;
             subject.Deref(ptr1);
-            long ptr3 = subject.Alloc(byteCount: 512);
+            long ptr3 = subject.Alloc(byteCount: 512).Value;
             
             Assert.That(ptr3, Is.GreaterThan(ptr2));
         }
@@ -78,7 +64,7 @@ namespace Sara.Tests
             
             var subject = new Allocator(100, Mega.Bytes(1));
             
-            long ptr = subject.Alloc(byteCount: 256);
+            long ptr = subject.Alloc(byteCount: 256).Value;
             subject.Reference(ptr);
             subject.Reference(ptr);
             subject.Deref(ptr);
@@ -92,8 +78,8 @@ namespace Sara.Tests
             var subject = new Allocator(100, Mega.Bytes(1));
 
             int first = subject.CurrentArena();
-            long ptr1 = subject.Alloc(Allocator.ArenaSize);
-            long ptr2 = subject.Alloc(Kilo.Bytes(1));
+            long ptr1 = subject.Alloc(Allocator.ArenaSize).Value;
+            long ptr2 = subject.Alloc(Kilo.Bytes(1)).Value;
             int second = subject.CurrentArena();
 
             Assert.That(ptr1, Is.Not.EqualTo(ptr2));
@@ -105,20 +91,20 @@ namespace Sara.Tests
         {
             var subject = new Allocator(100, Mega.Bytes(1));
 
-            long ptr1 = subject.Alloc(512);
-            long ptr2 = subject.Alloc(512);
-            long ptr3 = subject.Alloc(512);
+            long ptr1 = subject.Alloc(512).Value;
+            long ptr2 = subject.Alloc(512).Value;
+            long ptr3 = subject.Alloc(512).Value;
 
             subject.Deref(ptr1);
             subject.Deref(ptr2);
             
-            long ptr4 = subject.Alloc(512);
+            long ptr4 = subject.Alloc(512).Value;
 
             subject.Deref(ptr3);
             subject.Deref(ptr4);
 
             // should be reset now, and next alloc goes back to start
-            long ptrFinal = subject.Alloc(512);
+            long ptrFinal = subject.Alloc(512).Value;
 
             Assert.That(ptrFinal, Is.EqualTo(ptr1));
         }
@@ -133,26 +119,26 @@ namespace Sara.Tests
             var bump = (Allocator.ArenaSize / 4) + 1; // three fit in each arena, with some spare
             var subject = new Allocator(512, Mega.Bytes(1));
 
-            var x1 = subject.Alloc(bump);
+            var x1 = subject.Alloc(bump).Value;
             var ar1 = subject.CurrentArena();
 
             subject.Alloc(bump);subject.Alloc(bump); // fill up first arena
             
-            var x2 = subject.Alloc(bump);
+            var x2 = subject.Alloc(bump).Value;
             var ar2 = subject.CurrentArena();
 
             Assert.That(ar1, Is.Not.EqualTo(ar2), "Failed to trigger a new arena");
 
             // Check that both arenas are non-empty:
-            Assert.That(subject.GetArenaOccupation(ar1), Is.Not.Zero);
-            Assert.That(subject.GetArenaOccupation(ar2), Is.Not.Zero);
+            Assert.That(subject.GetArenaOccupation(ar1).Value, Is.Not.Zero);
+            Assert.That(subject.GetArenaOccupation(ar2).Value, Is.Not.Zero);
 
             // Run the scan (note we don't need all pointers, just one from each arena)
             subject.ScanAndSweep(new []{ x1, x2 });
             
             // Check nothing has been cleared
-            Assert.That(subject.GetArenaOccupation(ar1), Is.Not.Zero);
-            Assert.That(subject.GetArenaOccupation(ar2), Is.Not.Zero);
+            Assert.That(subject.GetArenaOccupation(ar1).Value, Is.Not.Zero);
+            Assert.That(subject.GetArenaOccupation(ar2).Value, Is.Not.Zero);
         }
 
         [Test]
@@ -166,24 +152,24 @@ namespace Sara.Tests
 
             subject.Alloc(bump);subject.Alloc(bump); // fill up first arena
             
-            var x2 = subject.Alloc(bump);
+            var x2 = subject.Alloc(bump).Value;
             var ar2 = subject.CurrentArena();
 
             Assert.That(ar1, Is.Not.EqualTo(ar2), "Failed to trigger a new arena");
 
             // Check that both arenas are non-empty:
-            Assert.That(subject.GetArenaOccupation(ar1), Is.Not.Zero);
-            Assert.That(subject.GetArenaOccupation(ar2), Is.Not.Zero);
+            Assert.That(subject.GetArenaOccupation(ar1).Value, Is.Not.Zero);
+            Assert.That(subject.GetArenaOccupation(ar2).Value, Is.Not.Zero);
 
             // Run the scan (only including the second arena)
             subject.ScanAndSweep(new []{ x2 });
             
             // Check nothing has been cleared
-            Assert.That(subject.GetArenaOccupation(ar1), Is.Zero, "Unreferenced arena was not reset");
-            Assert.That(subject.GetArenaOccupation(ar2), Is.Not.Zero);
+            Assert.That(subject.GetArenaOccupation(ar1).Value, Is.Zero, "Unreferenced arena was not reset");
+            Assert.That(subject.GetArenaOccupation(ar2).Value, Is.Not.Zero);
         }
 
-        [Test] // todo: do something better once the rest is working?
+        [Test] // The vector class can be used to store larger chunks of data
         public void requesting_a_block_larger_than_a_single_area_fails()
         {
             // Doing this to keep things very simple
@@ -191,7 +177,7 @@ namespace Sara.Tests
 
             var result = subject.Alloc(Allocator.ArenaSize * 2);
 
-            Assert.That(result, Is.EqualTo(Allocator.INVALID_ALLOC));
+            Assert.That(result.Success, Is.False);
         }
 
         [Test]
@@ -199,14 +185,14 @@ namespace Sara.Tests
         {
             var subject = new Allocator(10, Mega.Bytes(1));
 
-            long result = 0;
+            Result<long> result = default;
 
             for (int i = 0; i < 17; i++)
             {
                 result = subject.Alloc(Allocator.ArenaSize - 1);
             }
-
-            Assert.That(result, Is.EqualTo(Allocator.OUT_OF_MEMORY));
+            
+            Assert.That(result.Success, Is.False);
         }
 
         [Test] // a stress test of sorts
@@ -215,7 +201,7 @@ namespace Sara.Tests
             var subject = new Allocator(Giga.Bytes(1), Giga.Bytes(2)); // big for an embedded system. 3GB total.
 
             var result = subject.Alloc(Allocator.ArenaSize / 2);
-            Assert.That(result, Is.EqualTo(Giga.Bytes(1))); // allocated at bottom
+            Assert.That(result.Value, Is.EqualTo(Giga.Bytes(1))); // allocated at bottom
 
             for (int i = 0; i < 1000; i++)
             {
@@ -223,7 +209,7 @@ namespace Sara.Tests
             }
 
             Assert.That(subject.CurrentArena(), Is.GreaterThanOrEqualTo(1000));
-            Assert.That(result, Is.GreaterThan(Giga.Bytes(1)));
+            Assert.That(result.Value, Is.GreaterThan(Giga.Bytes(1)));
             
             // Test a scan
             subject.ScanAndSweep(new long[0]);
@@ -239,7 +225,7 @@ namespace Sara.Tests
             subject.GetState(out var allocatedBytes, out var unallocatedBytes, out var occupiedArenas, out var emptyArenas, out var refCount, out var largestBlock);
 
             Assert.That(allocatedBytes, Is.Zero);
-            Assert.That(unallocatedBytes, Is.EqualTo(1048560)); // ... so we end up with slightly less space that's usable. Max loss is 64K
+            Assert.That(unallocatedBytes, Is.EqualTo(1048560)); // ... so we end up with slightly less space that's usable. Max loss is < 64K
             Assert.That(largestBlock, Is.EqualTo(Allocator.ArenaSize));
 
             Assert.That(occupiedArenas, Is.Zero);

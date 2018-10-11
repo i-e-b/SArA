@@ -6,21 +6,9 @@
     public class Allocator
     {
         /// <summary>
-        /// Memory could never be allocated (program fault)
-        /// </summary>
-        public const long INVALID_ALLOC = -2;
-
-        /// <summary>
-        /// Memory exhausted. A GC scan or defrag might help.
-        /// </summary>
-        public const long OUT_OF_MEMORY = -1;
-
-        /// <summary>
         /// Size of each arena in bytes. This is the maximum allocation size
         /// </summary>
         public const long ArenaSize = ushort.MaxValue;
-
-
 
         /// <summary>
         /// Bottom of memory
@@ -73,9 +61,9 @@
         /// </summary><remarks>
         /// We could distribute allocations among arenas to improve the chance we can use a back-step to reduce fragmenting
         /// </remarks>
-        public long Alloc(long byteCount)
+        public Result<long> Alloc(long byteCount)
         {
-            if (byteCount > ArenaSize) return INVALID_ALLOC;
+            if (byteCount > ArenaSize) return Result.Fail<long>(); //INVALID_ALLOC;
             var maxOff = ArenaSize - byteCount;
 
             // scan for first arena where there is enough room
@@ -92,37 +80,40 @@
                 _meta[i].Head += (ushort)byteCount; // advance pointer to end of allocated data
                 _meta[i].RefCount++; // increase arena ref count
 
-                return result + (i * ArenaSize) + _start; // turn the offset into an absolute position
+                return Result.Ok(result + (i * ArenaSize) + _start); // turn the offset into an absolute position
             }
 
             // found nothing
-            return OUT_OF_MEMORY;
+            return Result.Fail<long>();
         }
 
 
         /// <summary>
         /// Claim another reference to a pointer
         /// </summary>
-        public void Reference(long ptr)
+        public Result<Unit> Reference(long ptr)
         {
-            var arena = ArenaForPtr(ptr);
-            if (arena < 0) return;
+            var res = ArenaForPtr(ptr);
+            if ( ! res.Success) return Result.Fail<Unit>();
+            var arena = res.Value;
 
-            if (_meta[arena].RefCount == ushort.MaxValue) return; // saturated references. Fix your code.
+            if (_meta[arena].RefCount == ushort.MaxValue) return Result.Fail<Unit>(); // saturated references. Fix your code.
 
             _meta[arena].RefCount++;
+            return Result.Ok();
         }
 
         /// <summary>
         /// Drop a claim to a pointer
         /// </summary>
-        public void Deref(long ptr)
+        public Result<Unit> Deref(long ptr)
         {
-            var arena = ArenaForPtr(ptr);
-            if (arena < 0) return;
+            var res = ArenaForPtr(ptr);
+            if ( ! res.Success) return Result.Fail<Unit>();
+            var arena = res.Value;
 
             var refCount = _meta[arena].RefCount;
-            if (refCount == 0) return; // Overfree. Fix your code.
+            if (refCount == 0) return Result.Fail<Unit>(); // Overfree. Fix your code.
 
             refCount--;
             _meta[arena].RefCount = refCount;
@@ -132,14 +123,15 @@
                 _meta[arena].Head = 0;
                 if (arena < _currentArena) _currentArena = arena; // keep allocations packed in low memory. Is this worth it?
             }
+            return Result.Ok();
         }
 
-        private int ArenaForPtr(long ptr)
+        private Result<int> ArenaForPtr(long ptr)
         {
-            if (ptr < _start || ptr > _limit) return -1;
+            if (ptr < _start || ptr > _limit) return Result.Fail<int>();
             int arena = (int) ((ptr - _start) / ArenaSize);
-            if (arena < 0 || arena >= _arenaCount) return -1;
-            return arena;
+            if (arena < 0 || arena >= _arenaCount) return Result.Fail<int>();;
+            return Result.Ok(arena);
         }
 
         /// <summary>
@@ -154,20 +146,20 @@
         /// Get the head position offset for the given arena.
         /// Empty or reset arenas will return 0. Invalid references will give negative result.
         /// </summary>
-        public int GetArenaOccupation(int arena)
+        public Result<int> GetArenaOccupation(int arena)
         {
-            if (arena < 0 || arena >= _arenaCount) return -1;
-            return _meta[arena].Head;
+            if (arena < 0 || arena >= _arenaCount) return Result.Fail<int>();
+            return Result.Ok((int)_meta[arena].Head);
         }
         
         /// <summary>
         /// Get the recorded reference count for the given arena. This is a sum of all contained pointers
         /// Empty or reset arenas will return 0. Invalid references will give negative result.
         /// </summary>
-        public int ArenaRefCount(int arena)
+        public Result<int> ArenaRefCount(int arena)
         {
-            if (arena < 0 || arena >= _arenaCount) return -1;
-            return _meta[arena].RefCount;
+            if (arena < 0 || arena >= _arenaCount) return Result.Fail<int>();
+            return Result.Ok((int)_meta[arena].RefCount);
         }
 
         /// <summary>
@@ -187,7 +179,10 @@
             for (int i = 0; i < referenceList.Length; i++)
             {
                 var a = ArenaForPtr(referenceList[i]);
-                _meta[a].RefCount++;
+                if (a.Success)
+                {
+                    _meta[a.Value].RefCount++;
+                }
             }
 
             // reset any arenas still zeroed

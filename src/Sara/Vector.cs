@@ -70,8 +70,11 @@
 
         private Result<long> NewChunk()
         {
-            var ptr = _alloc.Alloc(ChunkBytes);
-            if (ptr < 0) return Result.Fail<long>();
+            var res = _alloc.Alloc(ChunkBytes);
+            if ( ! res.Success) return Result.Fail<long>();
+            if (res.Value < 0) return Result.Fail<long>();
+
+            var ptr = res.Value;
 
             _mem.Write<long>(ptr, -1); // need to make sure the continuation pointer is invalid
             return Result.Ok(ptr);
@@ -225,7 +228,7 @@
         /// </summary>
         protected Result<long> PtrOfElem(uint index)
         {
-            if (index >= _elementCount) return Result.Fail<long>(); // TODO: some kind of failure flag. No using exceptions
+            if (index >= _elementCount) return Result.Fail<long>();
 
             // Figure out what chunk we should be in:
             var chunkIdx = index / ElemsPerChunk;

@@ -1,14 +1,24 @@
 ﻿
 namespace Sara
 {
+    /// <summary>
+    /// Structure to for operations that might fail.
+    /// </summary>
     public struct Result<T> where T: unmanaged
     {
         public bool Success;
         public T Value;
     }
 
+    /// <summary>
+    /// Struct that represents nothing. Used for Result where
+    /// there is success/failure, but not an outcome
+    /// </summary>
     public struct Unit{ }
 
+    /// <summary>
+    /// Helpers for result
+    /// </summary>
     public static class Result
     {
         public static Result<T> Fail<T>() where T: unmanaged{
