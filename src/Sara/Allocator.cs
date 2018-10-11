@@ -136,7 +136,6 @@
 
         private int ArenaForPtr(long ptr)
         {
-            // TODO: set a memory error flag for these bad things?
             if (ptr < _start || ptr > _limit) return -1;
             int arena = (int) ((ptr - _start) / ArenaSize);
             if (arena < 0 || arena >= _arenaCount) return -1;

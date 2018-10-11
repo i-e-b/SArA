@@ -23,9 +23,9 @@ namespace Sara.Tests
 
             Assert.That(subject.Length(), Is.EqualTo(2));
 
-            var r = subject.Get(0);
+            var r = subject.Get(0).Value;
             Assert.That(r, Is.EqualTo(Sample1()));
-            Assert.That(subject.Get(1), Is.EqualTo(Sample2()));
+            Assert.That(subject.Get(1).Value, Is.EqualTo(Sample2()));
         }
 
         [Test]
@@ -46,7 +46,7 @@ namespace Sara.Tests
             }
 
             var res = subject.Get(full - 1);
-            Assert.That(res.a, Is.EqualTo(full - 1));
+            Assert.That(res.Value.a, Is.EqualTo(full - 1));
         }
 
         [Test]
@@ -61,8 +61,8 @@ namespace Sara.Tests
 
             Assert.That(subject.Length(), Is.EqualTo(2));
 
-            Assert.That(subject.Pop(), Is.EqualTo(Sample2()));
-            Assert.That(subject.Pop(), Is.EqualTo(Sample1()));
+            Assert.That(subject.Pop().Value, Is.EqualTo(Sample2()));
+            Assert.That(subject.Pop().Value, Is.EqualTo(Sample1()));
             Assert.That(subject.Length(), Is.Zero);
         }
 
@@ -145,8 +145,8 @@ namespace Sara.Tests
             subject.Pop();
             subject.Push(Sample3());
 
-            Assert.That(subject.Get(0), Is.EqualTo(Sample1()));
-            Assert.That(subject.Get(1), Is.EqualTo(Sample3()));
+            Assert.That(subject.Get(0).Value, Is.EqualTo(Sample1()));
+            Assert.That(subject.Get(1).Value, Is.EqualTo(Sample3()));
         }
 
         [Test]
@@ -163,8 +163,8 @@ namespace Sara.Tests
             
             subject.Set(0, Sample3());
 
-            Assert.That(subject.Get(0), Is.EqualTo(Sample3()));
-            Assert.That(subject.Get(1), Is.EqualTo(Sample2()));
+            Assert.That(subject.Get(0).Value, Is.EqualTo(Sample3()));
+            Assert.That(subject.Get(1).Value, Is.EqualTo(Sample2()));
         }
 
         [Test]
@@ -179,10 +179,10 @@ namespace Sara.Tests
 
             Assert.That(subject.Length(), Is.EqualTo(20));
 
-            Assert.That(subject.Get(0), Is.EqualTo(Sample1()));
-            Assert.That(subject.Get(19), Is.EqualTo(Sample1()));
+            Assert.That(subject.Get(0).Value, Is.EqualTo(Sample1()));
+            Assert.That(subject.Get(19).Value, Is.EqualTo(Sample1()));
 
-            Assert.That(subject.Get(10), Is.EqualTo(Sample3()));
+            Assert.That(subject.Get(10).Value, Is.EqualTo(Sample3()));
         }
 
         [Test]
@@ -213,18 +213,19 @@ namespace Sara.Tests
             subject.Set(end, Sample2());
 
             Assert.That(subject.Length(), Is.EqualTo(length), "Wrong length");
-            Assert.That(subject.Get(1), Is.EqualTo(Sample3()), "Wrong initial element at start");
-            Assert.That(subject.Get(end), Is.EqualTo(Sample2()), "Wrong initial element at end");
+            Assert.That(subject.Get(1).Value, Is.EqualTo(Sample3()), "Wrong initial element at start");
+            Assert.That(subject.Get(end).Value, Is.EqualTo(Sample2()), "Wrong initial element at end");
 
             // the main event:
             subject.Swap(1, end);
 
 
-            Assert.That(subject.Get(1), Is.EqualTo(Sample2()), "Wrong final element at start");
-            Assert.That(subject.Get(end), Is.EqualTo(Sample3()), "Wrong final element at end");
+            Assert.That(subject.Get(1).Value, Is.EqualTo(Sample2()), "Wrong final element at start");
+            Assert.That(subject.Get(end).Value, Is.EqualTo(Sample3()), "Wrong final element at end");
         }
 
-        
+
+        // ReSharper disable UnusedMember.Global
         public struct SampleElement {
             public int a;
             public double b;
@@ -263,5 +264,6 @@ namespace Sara.Tests
             public double l;
             public double m;
         }
+        // ReSharper restore UnusedMember.Global
     }
 }

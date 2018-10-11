@@ -14,6 +14,6 @@
         /// <summary>
         /// Number of references 
         /// </summary>
-        public ushort RefCount;
+        public ushort RefCount; // this could change to a scope?
     }
 }

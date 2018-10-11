@@ -100,7 +100,11 @@
 
                 countUsed = 0;
 
-                for (uint i = 0; i < oldCount; i++) if (oldBuckets.Get(i).hash != 0) PutInternal(oldBuckets.Get(i), false, false);
+                for (uint i = 0; i < oldCount; i++) {
+                    var res = oldBuckets.Get(i);
+                    if (!res.Success) continue;
+                    if (res.Value.hash != 0) PutInternal(res.Value, false, false);
+                }
 
                 oldBuckets.Deallocate();
             }
@@ -112,7 +116,14 @@
             uint index;
             if (Find(key, out index))
             {
-                value = buckets.Get(index).value;
+                var res = buckets.Get(index);
+                if (!res.Success)
+                {
+                    value = default;
+                    return false;
+                }
+
+                value = res.Value.value;
                 return true;
             }
 
@@ -137,31 +148,32 @@
 
             for (uint i = 0; i < count; i++)
             {
-                var
-                    indexCurrent = (indexInit + i) & countMod;
-                if (buckets.Get(indexCurrent).hash == 0)
+                var indexCurrent = (indexInit + i) & countMod;
+
+                var current = buckets.Get(indexCurrent);
+                if ( ! current.Success) return false; // internal failure
+
+                if (current.Value.hash == 0)
                 {
                     countUsed++;
                     buckets.Set(indexCurrent, entry);
                     return true;
                 }
 
-                if (checkDuplicates && (entry.hash == buckets.Get(indexCurrent).hash) &&
-                    KeyComparer(entry.key, buckets.Get(indexCurrent).key))
+                if (checkDuplicates && (entry.hash == current.Value.hash) &&
+                    KeyComparer(entry.key, current.Value.key))
                 {
-                    if (!canReplace) return false; // TODO: error propagation
-                                                   //throw new ArgumentException("An entry with the same key already exists", nameof(entry.key));
+                    if (!canReplace) return false;
 
                     buckets.Set(indexCurrent, entry);
                     return true;
                 }
 
-                var
-                    probeDistance = DistanceToInitIndex(indexCurrent);
+                var probeDistance = DistanceToInitIndex(indexCurrent);
                 if (probeCurrent > probeDistance)
                 {
                     probeCurrent = probeDistance;
-                    Swap(buckets,indexCurrent, ref entry); // needs reworking
+                    Swap(buckets,indexCurrent, ref entry);
                 }
                 probeCurrent++;
             }
@@ -175,26 +187,24 @@
             //    throw new ArgumentNullException(nameof(key));
 
             index = 0;
-            if (countUsed > 0)
+            if (countUsed <= 0) return false;
+
+            uint hash = GetHash(key);
+            uint indexInit = hash & countMod;
+            uint probeDistance = 0;
+
+            for (uint i = 0; i < count; i++)
             {
-                uint
-                    hash = GetHash(key),
-                    indexInit = hash & countMod,
-                    probeDistance = 0;
+                index = (indexInit + i) & countMod;
+                var res = buckets.Get(index);
+                if ( ! res.Success ) return false; // internal failure
 
-                for (uint i = 0; i < count; i++)
-                {
-                    index = (indexInit + i) & countMod;
+                if ((hash == res.Value.hash) && KeyComparer(key, res.Value.key))
+                    return true;
 
-                    if ((hash == buckets.Get(index).hash) && KeyComparer(key, buckets.Get(index).key))
-                        return true;
+                if (res.Value.hash != 0) probeDistance = DistanceToInitIndex(index);
 
-                    if (buckets.Get(index).hash != 0)
-                        probeDistance = DistanceToInitIndex(index);
-
-                    if (i > probeDistance)
-                        break;
-                }
+                if (i > probeDistance) break;
             }
 
             return false;
@@ -210,12 +220,14 @@
                     var curIndex = (index + i) & countMod;
                     var nextIndex = (index + i + 1) & countMod;
 
-                    if ((buckets.Get(nextIndex).hash == 0) || (DistanceToInitIndex(nextIndex) == 0))
+                    var res = buckets.Get(nextIndex);
+                    if ( ! res.Success ) return false; // internal failure
+
+                    if ((res.Value.hash == 0) || (DistanceToInitIndex(nextIndex) == 0))
                     {
                         buckets.Set(curIndex, default);
 
-                        if (--countUsed == shrinkAt)
-                            Resize(shrinkAt);
+                        if (--countUsed == shrinkAt) Resize(shrinkAt);
 
                         return true;
                     }
@@ -231,9 +243,8 @@
         {
             //Debug.Assert(buckets[indexStored].hash != 0);
 
-            var indexInit = buckets.Get(indexStored).hash & countMod;
-            if (indexInit <= indexStored)
-                return indexStored - indexInit;
+            var indexInit = buckets.Get(indexStored).Value.hash & countMod;
+            if (indexInit <= indexStored) return indexStored - indexInit;
             return indexStored + (count - indexInit);
         }
 
@@ -260,7 +271,7 @@
         private void Swap(Vector<Entry> vec, uint idx, ref Entry newEntry) {
             var temp = vec.Get(idx);
             vec.Set(idx, newEntry);
-            newEntry = temp;
+            newEntry = temp.Value;
         }
         
         /// <summary>
@@ -273,7 +284,10 @@
         public KVP[] AllEntries()
         {
             var size = 0;
-            for (uint i = 0; i < count; i++) if (buckets.Get(i).hash != 0) size++;
+            for (uint i = 0; i < count; i++) {
+                var res = buckets.Get(i);
+                if (res.Success && res.Value.hash != 0) size++;
+            }
 
             var result = new KVP[size];
             int j = 0;
@@ -281,9 +295,9 @@
             for (uint i = 0; i < count; i++)
             {
                 var ent = buckets.Get(i);
-                if (ent.hash == 0) continue;
+                if (ent.Value.hash == 0) continue;
 
-                result[j] = new KVP(ent.key, ent.value);
+                result[j] = new KVP(ent.Value.key, ent.Value.value);
                 j++;
             }
             return result;
