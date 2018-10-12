@@ -33,7 +33,7 @@
     /// <summary>
     /// Hash map designed for tagged data
     /// </summary>
-    public class TaggedHashMap
+    public class TaggedHashMap:IGcContainer
     {
 
         public virtual bool KeyComparer(TKey a, TKey b) {
@@ -79,39 +79,36 @@
             Resize(NextPow2(size), false);
         }
 
-        private void Resize(uint newSize, bool auto = true)
+        private bool Resize(uint newSize, bool auto = true)
         {
             var oldCount = count;
             var oldBuckets = buckets;
 
             count = newSize;
             countMod = newSize - 1;
-            //buckets = new Entry[newSize];
             buckets = new Vector<Entry>(_alloc, _mem);
-            buckets.Prealloc(newSize, default(Entry));
+            if ( ! buckets.IsValid) return false;
+            if ( ! buckets.Prealloc(newSize).Success) return false;
 
             growAt = auto ? (uint)(newSize*LOAD_FACTOR) : newSize;
             shrinkAt = auto ? newSize >> 2 : 0;
 
-            if ((countUsed > 0) && (newSize != 0) && oldBuckets != null)
-            {
-                //Debug.Assert(countUsed <= newSize);
-                //Debug.Assert(oldBuckets != null);
+            countUsed = 0;
 
-                countUsed = 0;
+            if ((oldCount <= 0) || (newSize == 0) || oldBuckets == null) return true;
 
-                for (uint i = 0; i < oldCount; i++) {
-                    var res = oldBuckets.Get(i);
-                    if (!res.Success) continue;
-                    if (res.Value.hash != 0) PutInternal(res.Value, false, false);
-                }
 
-                oldBuckets.Deallocate();
+            for (uint i = 0; i < oldCount; i++) {
+                var res = oldBuckets.Get(i);
+                if (!res.Success) continue;
+                if (res.Value.hash != 0) PutInternal(res.Value, false, false);
             }
 
+            oldBuckets.Deallocate();
+            return true;
         }
 
-        private bool Get(TKey key, out TValue value)
+        public bool Get(TKey key, out TValue value)
         {
             uint index;
             if (Find(key, out index))
@@ -133,9 +130,6 @@
 
         public bool Put(TKey key, TValue val, bool canReplace)
         {
-            //if (key == null) return false;
-                //throw new ArgumentNullException(nameof(key));
-
             if (countUsed == growAt) ResizeNext();
 
             return PutInternal(new Entry(GetHash(key), key, val), canReplace, true);
@@ -173,7 +167,7 @@
                 if (probeCurrent > probeDistance)
                 {
                     probeCurrent = probeDistance;
-                    Swap(buckets,indexCurrent, ref entry);
+                    if (!Swap(buckets,indexCurrent, ref entry)) return false;
                 }
                 probeCurrent++;
             }
@@ -248,9 +242,9 @@
             return indexStored + (count - indexInit);
         }
 
-        private void ResizeNext()
+        private bool ResizeNext()
         {
-            Resize(count == 0 ? 1 : count*2);
+            return Resize(count == 0 ? 1 : count*2);
         }
 
         private static uint NextPow2(uint c)
@@ -268,10 +262,12 @@
         /// <summary>
         /// Swap a vector entry with an external value
         /// </summary>
-        private void Swap(Vector<Entry> vec, uint idx, ref Entry newEntry) {
+        private bool Swap(Vector<Entry> vec, uint idx, ref Entry newEntry) {
             var temp = vec.Get(idx);
+            if (!temp.Success) return false;
             vec.Set(idx, newEntry);
             newEntry = temp.Value;
+            return true;
         }
         
         /// <summary>
@@ -303,9 +299,9 @@
             return result;
         }
 
-        public void Add(TKey key, TValue value)
+        public bool Add(TKey key, TValue value)
         {
-            Put(key, value, false);
+            return Put(key, value, false);
         }
 
         public bool ContainsKey(TKey key)
@@ -318,11 +314,6 @@
             return RemoveInternal(key);
         }
 
-        public bool TryGetValue(TKey key, out TValue value)
-        {
-            return Get(key, out value);
-        }
-
         public void Clear()
         {
             Resize(0);
@@ -330,6 +321,28 @@
 
         public int Count => (int) countUsed;
 
-        public bool IsReadOnly => false;
+        public ulong[] References()
+        {
+            var everything = AllEntries();
+            // TODO: filter pointers here, or let MECS do it?
+            // Also, how do we host the GC-reference-list itself? Do we create a special one, ignore its references and immediately abandon?
+            var result = new ulong[everything.Length * 2];
+            for (int i = 0; i < everything.Length; i++)
+            {
+                result[i] = everything[i].Value;
+                result[i*2] = everything[i].Key;
+            }
+            return result;
+        }
+
+        /// <summary>
+        /// Free all memory. The container MUST NOT be used after calling.
+        /// This is for use with manual management.
+        /// </summary>
+        public void Deallocate()
+        {
+            count = 0;
+            buckets?.Deallocate();
+        }
     }
 }

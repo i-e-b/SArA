@@ -6,19 +6,31 @@
     /// Uses an allocator and memory interface. Internally, it's a skip list.
     /// </summary>
     /// <typeparam name="TElement">A simple type that can be serialised to a byte array</typeparam>
-    public class Vector<TElement> where TElement: unmanaged 
+    public class Vector<TElement> : IGcContainer where TElement: unmanaged 
     {
-        public const int TARGET_ELEMS_PER_CHUNK = 64; // Bigger = faster, but more wasteful on small arrays
+        public const int TARGET_ELEMS_PER_CHUNK = 64; // Bigger = faster, but more memory-wasteful on small arrays
+        public const int SECOND_LEVEL_SKIP = 32; // Once this many chunks are ahead of current, we should add a 2nd level skip
+
+        /*
+         * Structure of the vector chunk:
+         *
+         * [Ptr to next chunk, or -1]    <- 8 bytes
+         * [Ptr (2nd level skip), or -1] <- 8 bytes
+         * [Chunk value (if set)]        <- sizeof(TElement)
+         * . . .
+         * [Chunk value]                 <- ... up to ChunkBytes
+         *
+         */
 
         public readonly int ElemsPerChunk;
         public readonly int ElementByteSize;
-        public readonly int PtrSize;
+        public readonly int ChunkHeaderSize;
         public readonly int ChunkBytes;
 
         private readonly Allocator _alloc;
         private readonly IMemoryAccess _mem;
         private readonly long _baseChunkTable;
-        private int _elementCount;
+        private uint _elementCount;
 
         /// <summary>
         /// If the initial setup worked ok, this is set to true
@@ -40,8 +52,8 @@
             }
 
             // Work out how many elements can fit in an arena
-            PtrSize = sizeof(long);
-            var spaceForElements = Allocator.ArenaSize - PtrSize; // need pointer space
+            ChunkHeaderSize = sizeof(long) * 2; // for each level of skip
+            var spaceForElements = Allocator.ArenaSize - ChunkHeaderSize; // need pointer space
             ElemsPerChunk = (int)(spaceForElements / ElementByteSize);
 
             if (ElemsPerChunk <= 1) {
@@ -52,7 +64,7 @@
             if (ElemsPerChunk > TARGET_ELEMS_PER_CHUNK)
                 ElemsPerChunk = TARGET_ELEMS_PER_CHUNK; // no need to go crazy with small items.
 
-            ChunkBytes = PtrSize + (ElemsPerChunk * ElementByteSize);
+            ChunkBytes = (ChunkHeaderSize) + (ElemsPerChunk * ElementByteSize);
 
             // We first make a table, which can store a few chunks, and can have a next-chunk-table pointer
             // Each chunk can hold a few elements.
@@ -76,11 +88,12 @@
 
             var ptr = res.Value;
 
-            _mem.Write<long>(ptr, -1); // need to make sure the continuation pointer is invalid
+            _mem.Write<long>(ptr, -1);           // set the continuation pointer to invalid
+            _mem.Write<long>(ptr + sizeof(long), -1); // set skip pointer to invalid
             return Result.Ok(ptr);
         }
 
-        public int Length()
+        public uint Length()
         {
             return _elementCount;
         }
@@ -97,9 +110,19 @@
             var chunkHeadPtr = _baseChunkTable;
             for (int i = 0; i < newChunkIdx; i++)
             {
+                if (newChunkIdx - i > SECOND_LEVEL_SKIP) {
+                    var skipPtr = _mem.Read<long>(chunkHeadPtr + sizeof(long));
+                    if (skipPtr >= 0) {
+                        i += SECOND_LEVEL_SKIP;
+                        chunkHeadPtr = skipPtr;
+                        continue;
+                    }
+                }
+
                 var nextChunkPtr = _mem.Read<long>(chunkHeadPtr);
                 if (nextChunkPtr <= 0) {
                     // need to alloc a new chunk
+                    // TODO: try to write the second-level skip
                     var res = NewChunk();
                     if (!res.Success) return Result.Fail<Unit>();
 
@@ -110,7 +133,7 @@
             }
 
             // Write value
-            _mem.Write(chunkHeadPtr + PtrSize + (ElementByteSize * entryIdx), value);
+            _mem.Write(chunkHeadPtr + ChunkHeaderSize + (ElementByteSize * entryIdx), value);
 
             _elementCount++;
             return Result.Ok();
@@ -121,22 +144,13 @@
         /// </summary>
         public Result<TElement> Get(uint index)
         {
-            if (index >= _elementCount) return Result.Fail<TElement>();
-
-            // Figure out what chunk we should be in:
-            var chunkIdx = index / ElemsPerChunk;
-            var entryIdx = index % ElemsPerChunk;
-
-            // Walk through the chunk chain
-            var chunkHeadPtr = _baseChunkTable;
-            for (int i = 0; i < chunkIdx; i++)
-            {
-                chunkHeadPtr = _mem.Read<long>(chunkHeadPtr);
-                if (chunkHeadPtr <= 0) return Result.Fail<TElement>(); // bad chunk table
-            }
+            // push in the value, returning previous value
+            var res = PtrOfElem(index);
+            if (! res.Success) return Result.Fail<TElement>();
+            var ptr = res.Value;
 
             // pull out the value
-            return Result.Ok( _mem.Read<TElement>(chunkHeadPtr + PtrSize + (ElementByteSize * entryIdx)) );
+            return Result.Ok( _mem.Read<TElement>(ptr) );
         }
 
         /// <summary>
@@ -156,20 +170,30 @@
             var chunkPrev = _baseChunkTable;
             for (int i = 0; i < chunkIdx; i++)
             {
+                if (chunkIdx - i > SECOND_LEVEL_SKIP) {
+                    var skipPtr = _mem.Read<long>(chunkHeadPtr + sizeof(long));
+                    if (skipPtr >= 0) {
+                        i += SECOND_LEVEL_SKIP;
+                        chunkHeadPtr = skipPtr;
+                        continue;
+                    }
+                }
+
                 chunkPrev = chunkHeadPtr;
                 chunkHeadPtr = _mem.Read<long>(chunkHeadPtr);
                 if (chunkHeadPtr <= 0) return Result.Fail<TElement>(); // bad chunk table
             }
             
             // Get the value
-            var result = _mem.Read<TElement>(chunkHeadPtr + PtrSize + (ElementByteSize * entryIdx));
+            var result = _mem.Read<TElement>(chunkHeadPtr + ChunkHeaderSize + (ElementByteSize * entryIdx));
 
             // If we've removed the only entry in a chunk,
             if (chunkIdx > 0 && entryIdx == 0)
             {
                 // dealloc last chunk
                 _alloc.Deref(chunkHeadPtr);
-                _mem.Write<long>(chunkPrev, -1); // drop pointer
+                _mem.Write<long>(chunkPrev, -1); // drop pointer in previous
+                // TODO: what about 2nd level skip?
             }
 
             _elementCount--;
@@ -201,22 +225,11 @@
         /// </summary>
         public Result<TElement> Set(uint index, TElement element)
         {
-            if (index >= _elementCount) return Result.Fail<TElement>();
-
-            // Figure out what chunk we should be in:
-            var chunkIdx = index / ElemsPerChunk;
-            var entryIdx = index % ElemsPerChunk;
-
-            // Walk through the chunk chain
-            var chunkHeadPtr = _baseChunkTable;
-            for (int i = 0; i < chunkIdx; i++)
-            {
-                chunkHeadPtr = _mem.Read<long>(chunkHeadPtr);
-                if (chunkHeadPtr <= 0) return Result.Fail<TElement>(); // bad chunk table
-            }
-
             // push in the value, returning previous value
-            var ptr = chunkHeadPtr + PtrSize + (ElementByteSize * entryIdx);
+            var res = PtrOfElem(index);
+            if (! res.Success) return Result.Fail<TElement>();
+            var ptr = res.Value;
+
             var old = _mem.Read<TElement>(ptr);
             _mem.Write(ptr, element);
             return Result.Ok(old);
@@ -238,26 +251,53 @@
             var chunkHeadPtr = _baseChunkTable;
             for (int i = 0; i < chunkIdx; i++)
             {
+                if (chunkIdx - i > SECOND_LEVEL_SKIP) {
+                    var skipPtr = _mem.Read<long>(chunkHeadPtr + sizeof(long));
+                    if (skipPtr >= 0) {
+                        i += SECOND_LEVEL_SKIP;
+                        chunkHeadPtr = skipPtr;
+                        continue;
+                    }
+                }
+
                 chunkHeadPtr = _mem.Read<long>(chunkHeadPtr);
                 if (chunkHeadPtr <= 0) return Result.Fail<long>(); // bad chunk table
             }
 
             // push in the value
-            return Result.Ok( chunkHeadPtr + PtrSize + (ElementByteSize * entryIdx) );
+            return Result.Ok( chunkHeadPtr + ChunkHeaderSize + (ElementByteSize * entryIdx) );
         }
 
         /// <summary>
         /// Ensure the vector is at least the given length.
-        /// Any additional slots are filled with the given element.
         /// If the array is longer or equal, no changes are made.
         /// </summary>
-        public void Prealloc(uint length, TElement element)
+        public Result<Unit> Prealloc(uint length)
         {
             var remain = length - _elementCount;
-            for (int i = 0; i < remain; i++)
+            if (remain < 1) return Result.Ok();
+
+            var newChunkIdx = length / ElemsPerChunk;
+            
+            // Walk through the chunk chain, adding where needed
+            var chunkHeadPtr = _baseChunkTable;
+            for (int i = 0; i < newChunkIdx; i++)
             {
-                Push(element); // could probably be optimised. This will scan multiple times.
+                var nextChunkPtr = _mem.Read<long>(chunkHeadPtr);
+                if (nextChunkPtr <= 0) {
+                    // need to alloc a new chunk
+                    // TODO: write the 2nd level skip
+                    var res = NewChunk();
+                    if (!res.Success) return Result.Fail<Unit>();
+
+                    nextChunkPtr = res.Value;
+                    _mem.Write(chunkHeadPtr, nextChunkPtr);
+                }
+                chunkHeadPtr = nextChunkPtr;
             }
+
+            _elementCount = length;
+            return Result.Ok();
         }
 
         /// <summary>
@@ -282,6 +322,26 @@
             _mem.Write(ptrB, valA);
 
             return Result.Ok();
+        }
+
+        /// <summary>
+        /// Return all continue pointers, maybe needs to return all tags in MECS
+        /// </summary>
+        public ulong[] References()
+        {
+            var index = _elementCount - 1;
+            var maxChunkIdx = index / ElemsPerChunk;
+            
+            var result = new ulong[maxChunkIdx + 1];
+            var chunkHeadPtr = _baseChunkTable;
+            for (int i = 0; i < maxChunkIdx; i++)
+            {
+                result[i] = (ulong) chunkHeadPtr;
+                chunkHeadPtr = _mem.Read<long>(chunkHeadPtr);
+                if (chunkHeadPtr <= 0) break;
+            }
+
+            return result;
         }
     }
 }

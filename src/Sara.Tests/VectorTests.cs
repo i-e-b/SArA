@@ -48,7 +48,7 @@ namespace Sara.Tests
             var res = subject.Get(full - 1);
             Assert.That(res.Value.a, Is.EqualTo(full - 1));
         }
-
+       
         [Test]
         public void popping_the_last_item_from_a_list_gives_its_value ()
         {
@@ -174,8 +174,10 @@ namespace Sara.Tests
 
             Assert.That(subject.Length(), Is.Zero);
 
-            subject.Prealloc(20, Sample1());
+            subject.Prealloc(20);
+            subject.Set(0, Sample1());
             subject.Set(10, Sample3());
+            subject.Set(19, Sample1());
 
             Assert.That(subject.Length(), Is.EqualTo(20));
 
@@ -206,7 +208,7 @@ namespace Sara.Tests
             
             uint length = (uint) (subject.ElemsPerChunk * 2);
 
-            subject.Prealloc(length, Sample1());
+            subject.Prealloc(length);
             var end = length - 1;
 
             subject.Set(1, Sample3());
@@ -222,6 +224,29 @@ namespace Sara.Tests
 
             Assert.That(subject.Get(1).Value, Is.EqualTo(Sample2()), "Wrong final element at start");
             Assert.That(subject.Get(end).Value, Is.EqualTo(Sample3()), "Wrong final element at end");
+        }
+
+        [Test] // stress test
+        public void can_handle_a_large_number_of_pushes_in_reasonable_time ()
+        {
+            var alloc = new Allocator(0, Mega.Bytes(10));
+            var subject = new Vector<uint>(alloc, new MemorySimulator(Mega.Bytes(10)));
+
+            Assert.That(subject.Length(), Is.Zero);
+
+            // Note: Internally, the Vector should decide to use extra skip levels on larger arrays
+
+            uint count = 100000;
+            for (uint i = 0; i < count; i++)
+            {
+                subject.Push(i);
+                subject.Get(i);
+            }
+
+            alloc.GetState(out var bytesAllocated, out _, out _, out _, out _, out _);
+            Console.WriteLine("Allocated " + bytesAllocated + " bytes");
+
+            Assert.That(subject.Length(), Is.EqualTo(count));
         }
 
 
