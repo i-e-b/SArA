@@ -12,10 +12,9 @@
         public const int SECOND_LEVEL_SKIP = 32; // Once this many chunks are ahead of current, we should add a 2nd level skip
 
         /*
-         * Structure of the vector chunk:
+         * Structure of the element chunk:
          *
          * [Ptr to next chunk, or -1]    <- 8 bytes
-         * [Ptr (2nd level skip), or -1] <- 8 bytes
          * [Chunk value (if set)]        <- sizeof(TElement)
          * . . .
          * [Chunk value]                 <- ... up to ChunkBytes
@@ -86,6 +85,8 @@
             if ( ! res.Success) return Result.Fail<long>();
             if (res.Value < 0) return Result.Fail<long>();
 
+            // TODO: handle higher-level skips
+
             var ptr = res.Value;
 
             _mem.Write<long>(ptr, -1);           // set the continuation pointer to invalid
@@ -110,19 +111,9 @@
             var chunkHeadPtr = _baseChunkTable;
             for (int i = 0; i < newChunkIdx; i++)
             {
-                if (newChunkIdx - i > SECOND_LEVEL_SKIP) {
-                    var skipPtr = _mem.Read<long>(chunkHeadPtr + sizeof(long));
-                    if (skipPtr >= 0) {
-                        i += SECOND_LEVEL_SKIP;
-                        chunkHeadPtr = skipPtr;
-                        continue;
-                    }
-                }
-
                 var nextChunkPtr = _mem.Read<long>(chunkHeadPtr);
                 if (nextChunkPtr <= 0) {
                     // need to alloc a new chunk
-                    // TODO: try to write the second-level skip
                     var res = NewChunk();
                     if (!res.Success) return Result.Fail<Unit>();
 
@@ -170,15 +161,6 @@
             var chunkPrev = _baseChunkTable;
             for (int i = 0; i < chunkIdx; i++)
             {
-                if (chunkIdx - i > SECOND_LEVEL_SKIP) {
-                    var skipPtr = _mem.Read<long>(chunkHeadPtr + sizeof(long));
-                    if (skipPtr >= 0) {
-                        i += SECOND_LEVEL_SKIP;
-                        chunkHeadPtr = skipPtr;
-                        continue;
-                    }
-                }
-
                 chunkPrev = chunkHeadPtr;
                 chunkHeadPtr = _mem.Read<long>(chunkHeadPtr);
                 if (chunkHeadPtr <= 0) return Result.Fail<TElement>(); // bad chunk table
@@ -251,15 +233,6 @@
             var chunkHeadPtr = _baseChunkTable;
             for (int i = 0; i < chunkIdx; i++)
             {
-                if (chunkIdx - i > SECOND_LEVEL_SKIP) {
-                    var skipPtr = _mem.Read<long>(chunkHeadPtr + sizeof(long));
-                    if (skipPtr >= 0) {
-                        i += SECOND_LEVEL_SKIP;
-                        chunkHeadPtr = skipPtr;
-                        continue;
-                    }
-                }
-
                 chunkHeadPtr = _mem.Read<long>(chunkHeadPtr);
                 if (chunkHeadPtr <= 0) return Result.Fail<long>(); // bad chunk table
             }
@@ -286,7 +259,6 @@
                 var nextChunkPtr = _mem.Read<long>(chunkHeadPtr);
                 if (nextChunkPtr <= 0) {
                     // need to alloc a new chunk
-                    // TODO: write the 2nd level skip
                     var res = NewChunk();
                     if (!res.Success) return Result.Fail<Unit>();
 
