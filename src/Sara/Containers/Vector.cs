@@ -8,8 +8,10 @@
     /// <typeparam name="TElement">A simple type that can be serialised to a byte array</typeparam>
     public class Vector<TElement> : IGcContainer where TElement: unmanaged 
     {
+        public const int PTR_SIZE = sizeof(long);
         public const int TARGET_ELEMS_PER_CHUNK = 64; // Bigger = faster, but more memory-wasteful on small arrays
-        public const int SECOND_LEVEL_SKIP = 32; // Once this many chunks are ahead of current, we should add a 2nd level skip
+        public const int SECOND_LEVEL_SKIPS = 32; // Maximum hop-off points. Bigger = faster, but more memory
+        public const int SKIP_ELEM_SIZE = sizeof(uint) + PTR_SIZE;
 
         /*
          * Structure of the element chunk:
@@ -21,6 +23,20 @@
          *
          */
 
+        /*
+         * Structure of skip table
+         *
+         * [Start Idx]      <-- 4 bytes (uint)
+         * [ChunkPtr]       <-- 8 bytes (ptr)
+         * . . .
+         * [Start Idx]
+         * [ChunkPtr]
+         *
+         * Recalculate that after a prealloc, or after a certain number of chunks
+         * have been added. This table could be biased, but for simplicity just
+         * evenly distribute for now.
+         */
+
         public readonly int ElemsPerChunk;
         public readonly int ElementByteSize;
         public readonly int ChunkHeaderSize;
@@ -28,8 +44,11 @@
 
         private readonly Allocator _alloc;
         private readonly IMemoryAccess _mem;
+        private uint _elementCount; // how long is the logical array
+        private uint _skipEntries; // how long is the logical skip table
+
         private readonly long _baseChunkTable;
-        private uint _elementCount;
+        private readonly long _skipTable;
 
         /// <summary>
         /// If the initial setup worked ok, this is set to true
@@ -51,7 +70,7 @@
             }
 
             // Work out how many elements can fit in an arena
-            ChunkHeaderSize = sizeof(long) * 2; // for each level of skip
+            ChunkHeaderSize = PTR_SIZE;
             var spaceForElements = Allocator.ArenaSize - ChunkHeaderSize; // need pointer space
             ElemsPerChunk = (int)(spaceForElements / ElementByteSize);
 
@@ -65,17 +84,28 @@
 
             ChunkBytes = (ChunkHeaderSize) + (ElemsPerChunk * ElementByteSize);
 
-            // We first make a table, which can store a few chunks, and can have a next-chunk-table pointer
+
+            // create the skip table
+            var res = _alloc.Alloc(SKIP_ELEM_SIZE * SECOND_LEVEL_SKIPS);
+            if ( ! res.Success) {
+                IsValid = false;
+                return;
+            }
+            _skipTable = res.Value;
+            _skipEntries = 0;
+
+            // Make a table, which can store a few chunks, and can have a next-chunk-table pointer
             // Each chunk can hold a few elements.
-            var res = NewChunk();
+            res = NewChunk();
 
             if ( ! res.Success) {
                 IsValid = false;
                 return;
             }
-
             _baseChunkTable = res.Value;
             _elementCount = 0;
+
+            // All done
             IsValid = true;
         }
 
@@ -85,12 +115,12 @@
             if ( ! res.Success) return Result.Fail<long>();
             if (res.Value < 0) return Result.Fail<long>();
 
-            // TODO: handle higher-level skips
+            // TODO: if we've added a few chunks since last update, then refresh the skip table
+            // Always set the last entry, as the end will tend to be hot.
 
             var ptr = res.Value;
 
             _mem.Write<long>(ptr, -1);           // set the continuation pointer to invalid
-            _mem.Write<long>(ptr + sizeof(long), -1); // set skip pointer to invalid
             return Result.Ok(ptr);
         }
 
@@ -312,6 +342,7 @@
                 chunkHeadPtr = _mem.Read<long>(chunkHeadPtr);
                 if (chunkHeadPtr <= 0) break;
             }
+            result[result.Length-1] = (ulong) _skipTable;
 
             return result;
         }
