@@ -145,8 +145,29 @@ namespace Sara.Tests
             subject.Pop();
             subject.Push(Sample3());
 
-            Assert.That(subject.Get(0).Value, Is.EqualTo(Sample1()));
-            Assert.That(subject.Get(1).Value, Is.EqualTo(Sample3()));
+            Assert.That(subject.Get(1).Value, Is.EqualTo(Sample3()), "Get 1 is wrong");
+            Assert.That(subject.Get(0).Value, Is.EqualTo(Sample1()), "Get 0 is wrong");
+        }
+
+        [Test]
+        public void add_and_removing_elements_works_with_pre_existing_allocations ()
+        {
+            var alloc = new Allocator(0, Mega.Bytes(1));
+            alloc.Alloc(174);
+            var subject = new Vector<SampleElement>(alloc, new MemorySimulator(Mega.Bytes(1)));
+
+            Assert.That(subject.Length(), Is.Zero);
+
+            subject.Push(Sample1());
+            subject.Push(Sample2());
+
+            Assert.That(subject.Length(), Is.EqualTo(2));
+            
+            subject.Pop();
+            subject.Push(Sample3());
+
+            Assert.That(subject.Get(1).Value, Is.EqualTo(Sample3()), "Get 1 is wrong");
+            Assert.That(subject.Get(0).Value, Is.EqualTo(Sample1()), "Get 0 is wrong");
         }
 
         [Test]
@@ -196,8 +217,8 @@ namespace Sara.Tests
             var bigStructVector = new Vector<HugeStruct>(new Allocator(0, Kilo.Bytes(80)), new MemorySimulator(Kilo.Bytes(80)));
             var byteVector = new Vector<byte>(new Allocator(0, Kilo.Bytes(80)), new MemorySimulator(Kilo.Bytes(80)));
 
-            Assert.That(byteVector.ElemsPerChunk, Is.EqualTo(64));   // Not too big on small elements
-            Assert.That(structVector.ElemsPerChunk, Is.EqualTo(64));
+            Assert.That(byteVector.ElemsPerChunk, Is.EqualTo(32));   // Not too big on small elements
+            Assert.That(structVector.ElemsPerChunk, Is.EqualTo(32));
             Assert.That(bigStructVector.ElemsPerChunk, Is.LessThan(32)); // scales down to fit arenas
         }
 
@@ -236,7 +257,7 @@ namespace Sara.Tests
 
             // Note: Internally, the Vector should decide to use extra skip levels on larger arrays
 
-            uint count = 100000;
+            uint count = 200000;
             for (uint i = 0; i < count; i++)
             {
                 subject.Push(i);
@@ -254,6 +275,11 @@ namespace Sara.Tests
         public struct SampleElement {
             public int a;
             public double b;
+
+            public override string ToString()
+            {
+                return "a="+a+"; b="+b;
+            }
         }
         public struct HugeStruct {
             public ReallyBigStruct a;

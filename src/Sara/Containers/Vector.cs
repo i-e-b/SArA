@@ -3,15 +3,19 @@
     /// <summary>
     /// A variable length array of variable elements.
     /// Acts as an expandable array and/or a stack.
-    /// Uses an allocator and memory interface. Internally, it's a skip list.
+    /// Uses an allocator and memory interface. Internally, it's a kind of binary-search skip list.
     /// </summary>
     /// <typeparam name="TElement">A simple type that can be serialised to a byte array</typeparam>
     public class Vector<TElement> : IGcContainer where TElement: unmanaged 
     {
-        public const int PTR_SIZE = sizeof(long);
-        public const int TARGET_ELEMS_PER_CHUNK = 64; // Bigger = faster, but more memory-wasteful on small arrays
+        // Tuning parameters:
+        public const int TARGET_ELEMS_PER_CHUNK = 32; // Bigger = faster, but more memory-wasteful on small arrays
         public const int SECOND_LEVEL_SKIPS = 32; // Maximum hop-off points. Bigger = faster, but more memory
-        public const int SKIP_ELEM_SIZE = sizeof(uint) + PTR_SIZE;
+        public const int MAX_SKIP_TABLE_AGE = 10; // number of chunks added before we update
+
+        public const int PTR_SIZE = sizeof(long);
+        public const int INDEX_SIZE =  sizeof(uint);
+        public const int SKIP_ELEM_SIZE = INDEX_SIZE + PTR_SIZE;
 
         /*
          * Structure of the element chunk:
@@ -26,10 +30,10 @@
         /*
          * Structure of skip table
          *
-         * [Start Idx]      <-- 4 bytes (uint)
-         * [ChunkPtr]       <-- 8 bytes (ptr)
+         * [ChunkIdx]      <-- 4 bytes (uint)
+         * [ChunkPtr]      <-- 8 bytes (ptr)
          * . . .
-         * [Start Idx]
+         * [ChunkIdx]
          * [ChunkPtr]
          *
          * Recalculate that after a prealloc, or after a certain number of chunks
@@ -45,15 +49,25 @@
         private readonly Allocator _alloc;
         private readonly IMemoryAccess _mem;
         private uint _elementCount; // how long is the logical array
-        private uint _skipEntries; // how long is the logical skip table
+        private uint _skipEntries;  // how long is the logical skip table
+        private int _skipTableAge;  // how many chunks have been added since we updated the skip table
 
+        #region Table pointers
+        /// <summary>Start of the chunk chain</summary>
         private readonly long _baseChunkTable;
-        private readonly long _skipTable;
+
+        /// <summary>End of the chunk chain</summary>
+        private long _endChunkPtr;
+
+        /// <summary>Pointer to skip table</summary>
+        private long _skipTable;
+        #endregion
 
         /// <summary>
         /// If the initial setup worked ok, this is set to true
         /// </summary>
         public readonly bool IsValid;
+
 
         /// <summary>
         /// A variable length array of variable elements.
@@ -85,18 +99,12 @@
             ChunkBytes = (ChunkHeaderSize) + (ElemsPerChunk * ElementByteSize);
 
 
-            // create the skip table
-            var res = _alloc.Alloc(SKIP_ELEM_SIZE * SECOND_LEVEL_SKIPS);
-            if ( ! res.Success) {
-                IsValid = false;
-                return;
-            }
-            _skipTable = res.Value;
-            _skipEntries = 0;
 
             // Make a table, which can store a few chunks, and can have a next-chunk-table pointer
             // Each chunk can hold a few elements.
-            res = NewChunk();
+            _skipEntries = 0;
+            _endChunkPtr = -1;
+            var res = NewChunk(); 
 
             if ( ! res.Success) {
                 IsValid = false;
@@ -115,13 +123,104 @@
             if ( ! res.Success) return Result.Fail<long>();
             if (res.Value < 0) return Result.Fail<long>();
 
-            // TODO: if we've added a few chunks since last update, then refresh the skip table
-            // Always set the last entry, as the end will tend to be hot.
-
             var ptr = res.Value;
+            _skipTableAge++; 
 
-            _mem.Write<long>(ptr, -1);           // set the continuation pointer to invalid
+            _mem.Write<long>(ptr, -1);                             // set the continuation pointer of the new chunk to invalid
+            if (_endChunkPtr >= 0) _mem.Write(_endChunkPtr, ptr);  // update the continuation pointer of the old end chunk
+            _endChunkPtr = ptr;                                    // update the end chunk pointer
+
+            // If we've added a few chunks since last update, then refresh the skip table
+            // Always set the last entry, as the end will tend to be hot.
+            if (_skipEntries == 0 || _skipTableAge > MAX_SKIP_TABLE_AGE) {
+                RebuildSkipTable();
+            }
+
             return Result.Ok(ptr);
+        }
+
+        private void RebuildSkipTable()
+        {
+            var chunkTotal = _elementCount / ElemsPerChunk;
+            if (_skipEntries == 0 || chunkTotal <= 1) // in initial warm up -- write a basic values to get started
+            {
+                if (_baseChunkTable < 0) return; // completely invalid state
+                var res = _alloc.Alloc(SKIP_ELEM_SIZE * 2);
+                if (!res.Success) return;
+                _skipTable = res.Value;
+                _mem.Write<uint>(_skipTable, 0); // chunk index
+                _mem.Write<long>(_skipTable + INDEX_SIZE, _baseChunkTable);
+                _skipEntries = 1; // next call will have a valid table
+                return;
+            }
+            
+            // Simple case: every chunk will fit in the skip table
+            // scan through and build it (will act as a simple binary search)
+            if (chunkTotal <= SECOND_LEVEL_SKIPS) // each chunk can be simply represented
+            {
+                BuildSimpleSkipTable(chunkTotal);
+                return; // live with the old one
+            }
+
+            // General case: not every chunk will fit in the skip table
+            // Find representative chunks using the existing table.
+            // (finding will be a combination of search and scan)
+            var newTable = _alloc.Alloc(SKIP_ELEM_SIZE * SECOND_LEVEL_SKIPS);
+            if (!newTable.Success) return; // live with the old one
+            var newTablePtr = newTable.Value;
+
+            var stride = _elementCount / SECOND_LEVEL_SKIPS;
+            uint target = 0;
+            var newSkipEntries = 0;
+            for (int i = 0; i < SECOND_LEVEL_SKIPS; i++)
+            {
+                FindNearestChunk(target, out var found, out var chunkPtr, out var chunkIndex);
+                if (!found) break; // dropped off the end?
+                if (chunkPtr < 0) break; // total fail
+                var iptr = newTablePtr + (SKIP_ELEM_SIZE * i);
+                _mem.Write<uint>(iptr, (uint)chunkIndex);
+                _mem.Write<long>(iptr + INDEX_SIZE, chunkPtr);
+                newSkipEntries++;
+                target += stride;
+            }
+            if (newSkipEntries < 1) // total fail
+            {
+                _alloc.Deref(newTablePtr);
+                return;
+            }
+            _skipEntries = (uint)newSkipEntries;
+            _alloc.Deref(_skipTable);
+            _skipTable = newTablePtr;
+        }
+
+        private void BuildSimpleSkipTable(long chunkTotal)
+        {
+            var newTable = _alloc.Alloc(SKIP_ELEM_SIZE * chunkTotal);
+            if (!newTable.Success) return;
+            var newTablePtr = newTable.Value;
+
+            var next = _baseChunkTable;
+            var newSkipEntries = 0;
+            for (int i = 0; i < chunkTotal; i++)
+            {
+                if (next < 0) break;
+                var iptr = newTablePtr + (SKIP_ELEM_SIZE * i);
+                _mem.Write<uint>(iptr, (uint) i);
+                _mem.Write<long>(iptr + INDEX_SIZE, next);
+                newSkipEntries++;
+                next = _mem.Read<long>(next);
+            }
+
+            if (newSkipEntries < 1) // total fail
+            {
+                _alloc.Deref(newTablePtr);
+                return;
+            }
+
+            _skipEntries = (uint) newSkipEntries;
+            _alloc.Deref(_skipTable);
+            _skipTable = newTablePtr;
+            return;
         }
 
         public uint Length()
@@ -134,29 +233,22 @@
         /// </summary>
         public Result<Unit> Push(TElement value)
         {
-            var newChunkIdx = _elementCount / ElemsPerChunk;
             var entryIdx = _elementCount % ElemsPerChunk;
             
-            // Walk through the chunk chain, adding where needed
-            var chunkHeadPtr = _baseChunkTable;
-            for (int i = 0; i < newChunkIdx; i++)
+            FindNearestChunk(_elementCount, out var found, out var chunkPtr, out _);
+            if (!found) // need a new chunk, write at start
             {
-                var nextChunkPtr = _mem.Read<long>(chunkHeadPtr);
-                if (nextChunkPtr <= 0) {
-                    // need to alloc a new chunk
-                    var res = NewChunk();
-                    if (!res.Success) return Result.Fail<Unit>();
-
-                    nextChunkPtr = res.Value;
-                    _mem.Write(chunkHeadPtr, nextChunkPtr);
-                }
-                chunkHeadPtr = nextChunkPtr;
+                var ok = NewChunk();
+                if (!ok.Success) return Result.Fail<Unit>();
+                _mem.Write(_endChunkPtr  + ChunkHeaderSize, value);
+                _elementCount++;
+                return Result.Ok();
             }
 
-            // Write value
-            _mem.Write(chunkHeadPtr + ChunkHeaderSize + (ElementByteSize * entryIdx), value);
-
+            // Writing value into existing chunk
+            _mem.Write(chunkPtr + ChunkHeaderSize + (ElementByteSize * entryIdx), value);
             _elementCount++;
+
             return Result.Ok();
         }
 
@@ -179,36 +271,29 @@
         /// </summary>
         public Result<TElement> Pop()
         {
-            var index = _elementCount - 1;
-            // Walk to find the chunk; if it's the FIRST entry in NOT-the-first chunk, dealloc the chunk and write to the prev.
+            TElement result;
+            if (_elementCount == 0) return Result.Fail<TElement>();
+            if (_elementCount == 1) {
+                result = _mem.Read<TElement>(_baseChunkTable + ChunkHeaderSize);
+                _elementCount--;
+                return Result.Ok(result);
+            }
 
-            // Figure out what chunk we should be in:
-            var chunkIdx = index / ElemsPerChunk;
+            var index = _elementCount - 1;
+            
             var entryIdx = index % ElemsPerChunk;
 
-            // Walk through the chunk chain
-            var chunkHeadPtr = _baseChunkTable;
-            var chunkPrev = _baseChunkTable;
-            for (int i = 0; i < chunkIdx; i++)
-            {
-                chunkPrev = chunkHeadPtr;
-                chunkHeadPtr = _mem.Read<long>(chunkHeadPtr);
-                if (chunkHeadPtr <= 0) return Result.Fail<TElement>(); // bad chunk table
-            }
-            
             // Get the value
-            var result = _mem.Read<TElement>(chunkHeadPtr + ChunkHeaderSize + (ElementByteSize * entryIdx));
-
-            // If we've removed the only entry in a chunk,
-            if (chunkIdx > 0 && entryIdx == 0)
-            {
-                // dealloc last chunk
-                _alloc.Deref(chunkHeadPtr);
-                _mem.Write<long>(chunkPrev, -1); // drop pointer in previous
-                // TODO: what about 2nd level skip?
-            }
-
+            result = _mem.Read<TElement>(_endChunkPtr + ChunkHeaderSize + (ElementByteSize * entryIdx));
             _elementCount--;
+            
+            if (entryIdx < 1) // need to dealloc last chunk
+            {
+                FindNearestChunk(index - 1, out _, out var prevChunkPtr, out _);
+                _alloc.Deref(_endChunkPtr);
+                _endChunkPtr = prevChunkPtr;
+                _mem.Write<long>(prevChunkPtr, -1); // drop pointer in previous
+            }
             return Result.Ok(result);
         }
 
@@ -218,6 +303,7 @@
         /// </summary>
         public void Deallocate()
         {
+            _alloc.Deref(_skipTable);
             // Walk through the chunk chain, removing until we hit an invalid pointer
             var current = _baseChunkTable;
             while(true)
@@ -247,6 +333,58 @@
             return Result.Ok(old);
         }
 
+        /// <summary>
+        /// Find the chunk (with start index) that contains or is before the given index
+        /// </summary>
+        protected void FindNearestChunk(uint targetIndex, out bool found, out long chunkPtr, out uint chunkIndex)
+        {
+            // 1. Calculate desired chunk index
+            uint targetChunkIdx = (uint) (targetIndex / ElemsPerChunk);
+
+            // 1b. Optimise for end-of-chain (very likely for Push & Pop)
+            var endChunk = (_elementCount-1) / ElemsPerChunk;
+            if (_elementCount == 0 || targetChunkIdx == endChunk) {
+                found = true;
+                chunkPtr = _endChunkPtr;
+                chunkIndex = targetChunkIdx;
+                return;
+            }
+
+            // 2. Binary search through the skip table, find largest chunk <= desired index
+            uint lower = 0; // index in skip table
+            uint upper = _skipEntries;
+
+            while (lower < upper) {
+                // [Start Idx]      <-- 4 bytes (uint)
+                // [ChunkPtr]       <-- 8 bytes (ptr)
+                var mid = ((upper - lower) / 2) + lower;
+                if (mid == lower) break;
+                
+                var midChunkIdx = _mem.Read<uint>(_skipTable + (SKIP_ELEM_SIZE * mid));
+                if (midChunkIdx <= targetChunkIdx) lower = mid;
+                else upper = mid;
+            }
+
+            // 3. Walk the chain until we hit the end or find the chunk we want
+            var skipBaseAddr = _skipTable + (SKIP_ELEM_SIZE * lower);
+            var startChunkIdx = _mem.Read<uint>(skipBaseAddr);
+            var chunkHeadPtr = _mem.Read<long>(skipBaseAddr + INDEX_SIZE);
+            for (uint i = startChunkIdx; i < targetChunkIdx; i++)
+            {
+                chunkHeadPtr = _mem.Read<long>(chunkHeadPtr);
+                if (chunkHeadPtr <= 0) // hit the end of the chain
+                {
+                    found = false;
+                    chunkPtr = chunkHeadPtr;
+                    chunkIndex = i;
+                    return;
+                }
+            }
+            
+            found = true;
+            chunkPtr = chunkHeadPtr;
+            chunkIndex = targetChunkIdx;
+        }
         
         /// <summary>
         /// Get a pointer for an index
@@ -255,20 +393,12 @@
         {
             if (index >= _elementCount) return Result.Fail<long>();
 
-            // Figure out what chunk we should be in:
-            var chunkIdx = index / ElemsPerChunk;
             var entryIdx = index % ElemsPerChunk;
-
-            // Walk through the chunk chain
-            var chunkHeadPtr = _baseChunkTable;
-            for (int i = 0; i < chunkIdx; i++)
-            {
-                chunkHeadPtr = _mem.Read<long>(chunkHeadPtr);
-                if (chunkHeadPtr <= 0) return Result.Fail<long>(); // bad chunk table
-            }
+            FindNearestChunk(index, out var found, out var chunkPtr, out _);
+            if (!found) return Result.Fail<long>();
 
             // push in the value
-            return Result.Ok( chunkHeadPtr + ChunkHeaderSize + (ElementByteSize * entryIdx) );
+            return Result.Ok(chunkPtr + ChunkHeaderSize + (ElementByteSize * entryIdx) );
         }
 
         /// <summary>
@@ -293,12 +423,14 @@
                     if (!res.Success) return Result.Fail<Unit>();
 
                     nextChunkPtr = res.Value;
-                    _mem.Write(chunkHeadPtr, nextChunkPtr);
                 }
                 chunkHeadPtr = nextChunkPtr;
             }
 
             _elementCount = length;
+
+            RebuildSkipTable(); // make sure we're up to date
+
             return Result.Ok();
         }
 

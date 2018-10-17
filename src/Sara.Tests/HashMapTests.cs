@@ -58,7 +58,7 @@ namespace Sara.Tests
             var subject = new TaggedHashMap(64000, new Allocator(0, Mega.Bytes(50)), new MemorySimulator(Mega.Bytes(50)));
 
             subject.Add(0, 1);
-            for (int i = 0; i < 20000; i++) // performance falls off a cliff between 10K and 100K ops
+            for (int i = 0; i < 40000; i++) // performance falls off a cliff between 10K and 100K ops
                                             // due to the vector impl.
             {
                 if (!subject.Put((ulong)rnd.Next(1, 1000000), (ulong)i, true)) break;
