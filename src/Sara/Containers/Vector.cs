@@ -10,7 +10,7 @@
     {
         // Tuning parameters:
         public const int TARGET_ELEMS_PER_CHUNK = 32; // Bigger = faster, but more memory-wasteful on small arrays
-        public const int SECOND_LEVEL_SKIPS = 64; // Maximum hop-off points. Bigger = faster, but more memory. Careful that it's not bigger than an arena (keep it under 1000)
+        public const int SECOND_LEVEL_SKIPS = 32; // Maximum hop-off points. Bigger = faster, but more memory. Careful that it's not bigger than an arena (keep it under 1000)
         public const int MIN_REBUILD_AGE = 5;
 
         public const int PTR_SIZE = sizeof(long);
@@ -147,89 +147,167 @@
 
         private void RebuildSkipTable()
         {
-            var chunkTotal = _elementCount / ElemsPerChunk;
-            if (_skipEntries == 0 || chunkTotal <= 1) // need to alloc table
+            unchecked
             {
-                if (_baseChunkTable < 0) return; // completely invalid state
-                if (_skipTable < 0)
+                var chunkTotal = _elementCount / ElemsPerChunk;
+                if (chunkTotal < 3) // not worth having a skip table
                 {
-                    var res = _alloc.Alloc(SKIP_ELEM_SIZE * 2);
-                    if (!res.Success) return;
-                    _skipTable = res.Value;
+                    if (_skipTable >= 0) _alloc.Deref(_skipTable);
+                    _skipTable = -1;
+                    _skipEntries = 0;
                 }
-                _mem.Write<uint>(_skipTable, 0); // chunk index
-                _mem.Write<long>(_skipTable + INDEX_SIZE, _baseChunkTable);
-                _skipEntries = 1; // next call will have a valid table
-                return;
-            }
-            
-            // Simple case: every chunk will fit in the skip table
-            // scan through and build it (will act as a simple binary search)
-            if (chunkTotal <= SECOND_LEVEL_SKIPS) // each chunk can be simply represented
-            {
-                BuildSimpleSkipTable(chunkTotal);
-                return;
-            }
 
-            // General case: not every chunk will fit in the skip table
-            // Find representative chunks using the existing table.
-            // (finding will be a combination of search and scan)
-            var newTable = _alloc.Alloc(SKIP_ELEM_SIZE * SECOND_LEVEL_SKIPS);
-            if (!newTable.Success) return; // live with the old one
-            var newTablePtr = newTable.Value;
+                // Simple case: every chunk will fit in the skip table
+                // scan through and build it
+                if (chunkTotal <= SECOND_LEVEL_SKIPS) // each chunk can be simply represented
+                {
+                    BuildSimpleSkipTable(chunkTotal);
+                    return;
+                }
 
-            var stride = _elementCount / SECOND_LEVEL_SKIPS;
-            uint target = 0;
-            var newSkipEntries = 0;
-            for (int i = 0; i < SECOND_LEVEL_SKIPS; i++)
-            {
-                FindNearestChunk(target, out var found, out var chunkPtr, out var chunkIndex);
-                if (!found) break; // dropped off the end?
-                if (chunkPtr < 0) break; // total fail
-                var iptr = newTablePtr + (SKIP_ELEM_SIZE * i);
-                _mem.Write<uint>(iptr, (uint)chunkIndex);
-                _mem.Write<long>(iptr + INDEX_SIZE, chunkPtr);
-                newSkipEntries++;
-                target += stride;
+                // General case: not every chunk will fit in the skip table
+                // Find representative chunks using the existing table.
+                // (finding will be a combination of search and scan)
+                var newTable = _alloc.Alloc(SKIP_ELEM_SIZE * SECOND_LEVEL_SKIPS);
+                if (!newTable.Success) return; // live with the old one
+                var newTablePtr = newTable.Value;
+
+                var stride = _elementCount / SECOND_LEVEL_SKIPS;
+                uint target = 0;
+                var newSkipEntries = 0;
+                for (int i = 0; i < SECOND_LEVEL_SKIPS; i++)
+                {
+                    FindNearestChunk(target, out var found, out var chunkPtr, out var chunkIndex);
+                    if (!found) break; // dropped off the end?
+                    if (chunkPtr < 0) break; // total fail
+                    var iptr = newTablePtr + (SKIP_ELEM_SIZE * i);
+                    _mem.Write<uint>(iptr, (uint)chunkIndex);
+                    _mem.Write<long>(iptr + INDEX_SIZE, chunkPtr);
+                    newSkipEntries++;
+                    target += stride;
+                }
+                if (newSkipEntries < 1) // total fail
+                {
+                    _alloc.Deref(newTablePtr);
+                    return;
+                }
+                _skipEntries = newSkipEntries;
+                if (_skipTable >= 0) _alloc.Deref(_skipTable);
+                _skipTable = newTablePtr;
             }
-            if (newSkipEntries < 1) // total fail
-            {
-                _alloc.Deref(newTablePtr);
-                return;
-            }
-            _skipEntries = newSkipEntries;
-            _alloc.Deref(_skipTable);
-            _skipTable = newTablePtr;
         }
 
         private void BuildSimpleSkipTable(long chunkTotal)
         {
-            var newTable = _alloc.Alloc(SKIP_ELEM_SIZE * chunkTotal);
-            if (!newTable.Success) return;
-            var newTablePtr = newTable.Value;
-
-            var next = _baseChunkTable;
-            var newSkipEntries = 0;
-            for (int i = 0; i < chunkTotal; i++)
+            unchecked
             {
-                if (next < 0) break;
-                var iptr = newTablePtr + (SKIP_ELEM_SIZE * i);
-                _mem.Write<uint>(iptr, (uint) i);
-                _mem.Write<long>(iptr + INDEX_SIZE, next);
-                newSkipEntries++;
-                next = _mem.Read<long>(next);
-            }
+                var newTable = _alloc.Alloc(SKIP_ELEM_SIZE * chunkTotal);
+                if (!newTable.Success) return;
+                var newTablePtr = newTable.Value;
 
-            if (newSkipEntries < 1) // total fail
-            {
-                _alloc.Deref(newTablePtr);
+                var next = _baseChunkTable;
+                var newSkipEntries = 0;
+                for (int i = 0; i < chunkTotal; i++)
+                {
+                    if (next < 0) break;
+                    var iptr = newTablePtr + (SKIP_ELEM_SIZE * i);
+                    _mem.Write<uint>(iptr, (uint)i);
+                    _mem.Write<long>(iptr + INDEX_SIZE, next);
+                    newSkipEntries++;
+                    next = _mem.Read<long>(next);
+                }
+
+                if (newSkipEntries < 1) // total fail
+                {
+                    _alloc.Deref(newTablePtr);
+                    return;
+                }
+
+                _skipEntries = newSkipEntries;
+                if (_skipTable >= 0) _alloc.Deref(_skipTable);
+                _skipTable = newTablePtr;
                 return;
             }
+        }
 
-            _skipEntries = newSkipEntries;
-            _alloc.Deref(_skipTable);
-            _skipTable = newTablePtr;
-            return;
+        /// <summary>
+        /// Find the chunk (with start index) that contains or is before the given index
+        /// </summary>
+        protected void FindNearestChunk(uint targetIndex, out bool found, out long chunkPtr, out uint chunkIndex)
+        {
+            unchecked
+            {
+                // 1. Calculate desired chunk index
+                uint targetChunkIdx = (uint)(targetIndex / ElemsPerChunk);
+                uint endChunk = (uint)((_elementCount - 1) / ElemsPerChunk);
+
+                // 2. Optimise for start- and end- of chain (small lists & very likely for Push & Pop)
+                if (_elementCount == 0 || targetChunkIdx == endChunk)
+                { // lands in a chunk
+                    found = true;
+                    chunkPtr = _endChunkPtr;
+                    chunkIndex = targetChunkIdx;
+                    return;
+                }
+                if (targetIndex >= _elementCount)
+                { // lands outside a chunk -- off the end
+                    found = false;
+                    chunkPtr = _endChunkPtr;
+                    chunkIndex = targetChunkIdx;
+                    return;
+                }
+                if (targetChunkIdx == 0)
+                { // start of chain
+                    found = true;
+                    chunkPtr = _baseChunkTable;
+                    chunkIndex = targetChunkIdx;
+                    return;
+                }
+
+                // 3. Use the skip table to find a chunk near the target
+                uint skipIdx = 0;
+                uint startChunkIdx = 0;
+                var chunkHeadPtr = _baseChunkTable;
+                
+                if (_skipEntries > 1) {
+                    var upperChunkIdx = _mem.Read<uint>(_skipTable + (SKIP_ELEM_SIZE * (_skipEntries - 1)));
+                    uint step = (uint)(upperChunkIdx / (_skipEntries - 1));
+                    skipIdx = targetChunkIdx / step;
+                    if (skipIdx >= _skipEntries) { skipIdx = (uint)(_skipEntries - 1); }
+
+                    var baseAddr = _skipTable + (SKIP_ELEM_SIZE * skipIdx);
+                    startChunkIdx = _mem.Read<uint>(baseAddr);
+                    chunkHeadPtr = _mem.Read<long>(baseAddr + INDEX_SIZE);
+                }
+
+                // 4. Walk the chain until we find the chunk we want
+                var walk = targetChunkIdx - startChunkIdx;
+                if (walk > 5 && _skipEntries < SECOND_LEVEL_SKIPS) _skipTableAge = 10000; // if we are walking too far, try builing a better table
+
+                for (; startChunkIdx < targetChunkIdx; startChunkIdx++)
+                {
+                    chunkHeadPtr = _mem.Read<long>(chunkHeadPtr);
+                }
+
+                found = true;
+                chunkPtr = chunkHeadPtr;
+                chunkIndex = targetChunkIdx;
+            }
+        }
+
+        /// <summary>
+        /// Get a pointer for an index
+        /// </summary>
+        protected Result<long> PtrOfElem(uint index)
+        {
+            if (index >= _elementCount) return Result.Fail<long>();
+
+            var entryIdx = index % ElemsPerChunk;
+            FindNearestChunk(index, out var found, out var chunkPtr, out _);
+            if (!found) return Result.Fail<long>();
+
+            // push in the value
+            return Result.Ok(chunkPtr + ChunkHeaderSize + (ElementByteSize * entryIdx) );
         }
 
         public uint Length()
@@ -341,86 +419,6 @@
             var old = _mem.Read<TElement>(ptr);
             _mem.Write(ptr, element);
             return Result.Ok(old);
-        }
-
-        /// <summary>
-        /// Find the chunk (with start index) that contains or is before the given index
-        /// </summary>
-        protected void FindNearestChunk(uint targetIndex, out bool found, out long chunkPtr, out uint chunkIndex)
-        {
-            unchecked
-            {
-                // 1. Calculate desired chunk index
-                uint targetChunkIdx = (uint)(targetIndex / ElemsPerChunk);
-                uint endChunk = (uint)((_elementCount - 1) / ElemsPerChunk);
-
-                // 1b. Optimise for end-of-chain (very likely for Push & Pop)
-                if (_elementCount == 0 || targetChunkIdx == endChunk)
-                { // lands in a chunk
-                    found = true;
-                    chunkPtr = _endChunkPtr;
-                    chunkIndex = targetChunkIdx;
-                    return;
-                }
-                if (targetIndex >= _elementCount)
-                { // lands outside a chunk -- off the end
-                    found = false;
-                    chunkPtr = _endChunkPtr;
-                    chunkIndex = targetChunkIdx;
-                    return;
-                }
-                // 1c. optimise for start of chain
-                if (targetChunkIdx == 0)
-                {
-                    found = true;
-                    chunkPtr = _baseChunkTable;
-                    chunkIndex = targetChunkIdx;
-                    return;
-                }
-
-                // TODO: Only use skip table if more than two chunks. Ensure table doesn't go to either end. 
-
-                // 2. Binary search through the skip table, find largest chunk <= desired index
-                uint skipIdx = 0;
-                
-                if (_skipEntries > 1) {
-                    var upperChunkIdx = _mem.Read<uint>(_skipTable + (SKIP_ELEM_SIZE * (_skipEntries - 1)));
-                    uint step = (uint)(upperChunkIdx / (_skipEntries - 1));
-                    skipIdx = targetChunkIdx / step;
-                    if (skipIdx >= _skipEntries){ skipIdx = (uint) (_skipEntries - 1); }
-                }
-
-                // 3. Walk the chain until we hit the end or find the chunk we want
-                var baseAddr = _skipTable + (SKIP_ELEM_SIZE * skipIdx);
-                var startChunkIdx = _mem.Read<uint>(baseAddr);
-                var chunkHeadPtr = _mem.Read<long>(baseAddr + INDEX_SIZE);
-                var walk = targetChunkIdx - startChunkIdx;
-                if (walk > 10 && _skipEntries < SECOND_LEVEL_SKIPS) _skipTableAge = 10000; // if we are walking too far, try builing a better table
-
-                for (; startChunkIdx < targetChunkIdx; startChunkIdx++)
-                {
-                    chunkHeadPtr = _mem.Read<long>(chunkHeadPtr);
-                }
-
-                found = true;
-                chunkPtr = chunkHeadPtr;
-                chunkIndex = targetChunkIdx;
-            }
-        }
-
-        /// <summary>
-        /// Get a pointer for an index
-        /// </summary>
-        protected Result<long> PtrOfElem(uint index)
-        {
-            if (index >= _elementCount) return Result.Fail<long>();
-
-            var entryIdx = index % ElemsPerChunk;
-            FindNearestChunk(index, out var found, out var chunkPtr, out _);
-            if (!found) return Result.Fail<long>();
-
-            // push in the value
-            return Result.Ok(chunkPtr + ChunkHeaderSize + (ElementByteSize * entryIdx) );
         }
 
         /// <summary>
