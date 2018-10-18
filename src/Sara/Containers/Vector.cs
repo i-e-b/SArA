@@ -9,7 +9,7 @@
     public class Vector<TElement> : IGcContainer where TElement: unmanaged 
     {
         // Tuning parameters:
-        public const int TARGET_ELEMS_PER_CHUNK = 64; // Bigger = faster, but more memory-wasteful on small arrays
+        public const int TARGET_ELEMS_PER_CHUNK = 32; // Bigger = faster, but more memory-wasteful on small arrays
         public const int SECOND_LEVEL_SKIPS = 64; // Maximum hop-off points. Bigger = faster, but more memory. Careful that it's not bigger than an arena (keep it under 1000)
         public const int MIN_REBUILD_AGE = 5;
 
@@ -369,49 +369,38 @@
                     chunkIndex = targetChunkIdx;
                     return;
                 }
+                // 1c. optimise for start of chain
+                if (targetChunkIdx == 0)
+                {
+                    found = true;
+                    chunkPtr = _baseChunkTable;
+                    chunkIndex = targetChunkIdx;
+                    return;
+                }
+
+                // TODO: Only use skip table if more than two chunks. Ensure table doesn't go to either end. 
 
                 // 2. Binary search through the skip table, find largest chunk <= desired index
-                uint lower = 0; // index in skip table
-                uint upper = (uint)_skipEntries; // this isn't off-by-one, we've already handled the tail condition
-                uint startChunkIdx = 0;
-
-                while (lower < upper)
-                {
-                    // [Start Idx]      <-- 4 bytes (uint)
-                    // [ChunkPtr]       <-- 8 bytes (ptr)
-                    var mid = ((upper - lower) / 2u) + lower;
-                    startChunkIdx = _mem.Read<uint>(_skipTable + (SKIP_ELEM_SIZE * mid));
-
-                    if (mid == lower) break;
-
-                    if (startChunkIdx > targetChunkIdx) upper = mid;
-                    else lower = mid;
+                uint skipIdx = 0;
+                
+                if (_skipEntries > 1) {
+                    var upperChunkIdx = _mem.Read<uint>(_skipTable + (SKIP_ELEM_SIZE * (_skipEntries - 1)));
+                    uint step = (uint)(upperChunkIdx / (_skipEntries - 1));
+                    skipIdx = targetChunkIdx / step;
+                    if (skipIdx >= _skipEntries){ skipIdx = (uint) (_skipEntries - 1); }
                 }
 
                 // 3. Walk the chain until we hit the end or find the chunk we want
-                var chunkHeadPtr = _mem.Read<long>(_skipTable + (SKIP_ELEM_SIZE * lower) + INDEX_SIZE);
+                var baseAddr = _skipTable + (SKIP_ELEM_SIZE * skipIdx);
+                var startChunkIdx = _mem.Read<uint>(baseAddr);
+                var chunkHeadPtr = _mem.Read<long>(baseAddr + INDEX_SIZE);
                 var walk = targetChunkIdx - startChunkIdx;
                 if (walk > 10 && _skipEntries < SECOND_LEVEL_SKIPS) _skipTableAge = 10000; // if we are walking too far, try builing a better table
 
-                for (uint i = startChunkIdx; i < targetChunkIdx; i++)
+                for (; startChunkIdx < targetChunkIdx; startChunkIdx++)
                 {
                     chunkHeadPtr = _mem.Read<long>(chunkHeadPtr);
-                    
-                    // This shouldn't happen due to the tail condition earlier
-                    // If we ever see an issue, put this check back in.
-                    /*
-                    
-                    var newHead = _mem.Read<long>(chunkHeadPtr);
-                    if (newHead <= 0) // hit the end of the chain
-                    {
-                        found = false;
-                        chunkPtr = chunkHeadPtr;
-                        chunkIndex = i;
-                        return;
-                    }
-                    chunkHeadPtr = newHead;*/
                 }
-
 
                 found = true;
                 chunkPtr = chunkHeadPtr;

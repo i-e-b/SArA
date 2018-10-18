@@ -20,9 +20,9 @@ namespace Sara
             // debug test:
             /*if (location < 0) throw new Exception("Invalid pointer: " + location);
             var sz = sizeof(T);
-            if (location + sz >= _data.LongLength) throw new Exception("Requested location ["+location+" to "+(location+sz)+"] of a maximum ["+_data.Length+"]");
+            if (location + sz >= _data.LongLength)
+                throw new Exception("Requested location ["+location+" to "+(location+sz)+"] of a maximum ["+_data.Length+"]");
             */
-
 
             // actual code
             fixed (byte* basePtr = &_data[location]) {
