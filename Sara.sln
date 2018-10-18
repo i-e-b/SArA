@@ -13,6 +13,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "_Info", "_Info", "{372226AC
 		README.md = README.md
 	EndProjectSection
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "StressTestingApp", "StressTestingApp\StressTestingApp.csproj", "{0C4B60D7-D8E1-417D-8E60-25E2778A0283}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -27,6 +29,10 @@ Global
 		{F87C943D-FE7B-43CF-9930-859BB3C6EFF6}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{F87C943D-FE7B-43CF-9930-859BB3C6EFF6}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{F87C943D-FE7B-43CF-9930-859BB3C6EFF6}.Release|Any CPU.Build.0 = Release|Any CPU
+		{0C4B60D7-D8E1-417D-8E60-25E2778A0283}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0C4B60D7-D8E1-417D-8E60-25E2778A0283}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0C4B60D7-D8E1-417D-8E60-25E2778A0283}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0C4B60D7-D8E1-417D-8E60-25E2778A0283}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

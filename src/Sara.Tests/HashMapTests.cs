@@ -55,13 +55,14 @@ namespace Sara.Tests
         public void stress_test()
         {
             var rnd = new Random();
-            var subject = new TaggedHashMap(64000, new Allocator(0, Mega.Bytes(50)), new MemorySimulator(Mega.Bytes(50)));
+            // we deliberately use a small initial size to stress the scaling.
+            // if you can afford to oversize the map, that will make things a lot faster
+            var subject = new TaggedHashMap(10000, new Allocator(0, Mega.Bytes(50)), new MemorySimulator(Mega.Bytes(50)));
 
             subject.Add(0, 1);
-            for (int i = 0; i < 40000; i++) // performance falls off a cliff between 10K and 100K ops
-                                            // due to the vector impl.
+            for (int i = 0; i < /*100000*/ 25000; i++) // 25'000 should be under a second
             {
-                if (!subject.Put((ulong)rnd.Next(1, 1000000), (ulong)i, true)) break;
+                if (!subject.Put((ulong)rnd.Next(1, 1000000), (ulong)i, true)) break;//Assert.Fail("Put rejected the change");
                 subject.Remove((ulong)rnd.Next(1, 1000000));
             }
 

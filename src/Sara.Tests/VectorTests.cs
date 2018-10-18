@@ -217,8 +217,8 @@ namespace Sara.Tests
             var bigStructVector = new Vector<HugeStruct>(new Allocator(0, Kilo.Bytes(80)), new MemorySimulator(Kilo.Bytes(80)));
             var byteVector = new Vector<byte>(new Allocator(0, Kilo.Bytes(80)), new MemorySimulator(Kilo.Bytes(80)));
 
-            Assert.That(byteVector.ElemsPerChunk, Is.EqualTo(32));   // Not too big on small elements
-            Assert.That(structVector.ElemsPerChunk, Is.EqualTo(32));
+            Assert.That(byteVector.ElemsPerChunk, Is.LessThan(70));   // Not too big on small elements
+            Assert.That(structVector.ElemsPerChunk, Is.GreaterThan(30));
             Assert.That(bigStructVector.ElemsPerChunk, Is.LessThan(32)); // scales down to fit arenas
         }
 
@@ -257,7 +257,7 @@ namespace Sara.Tests
 
             // Note: Internally, the Vector should decide to use extra skip levels on larger arrays
 
-            uint count = 200000;
+            uint count = 500_000;
             for (uint i = 0; i < count; i++)
             {
                 subject.Push(i);

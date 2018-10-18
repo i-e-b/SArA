@@ -1,4 +1,6 @@
-﻿namespace Sara
+﻿using System;
+
+namespace Sara
 {
     /// <summary>
     /// Behaves like raw memory access, for simulating embedded systems

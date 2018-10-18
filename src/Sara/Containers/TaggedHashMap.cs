@@ -54,7 +54,7 @@
         }
 
 
-        private const float LOAD_FACTOR = 0.6f; // higher is more memory efficient. Lower is faster, to a point.
+        private const float LOAD_FACTOR = 0.8f; // higher is more memory efficient. Lower is faster, to a point.
         private const uint SAFE_HASH = 0x80000000; // just in case you get a zero result
 
         private Vector<Entry> buckets;
@@ -130,7 +130,9 @@
 
         public bool Put(TKey key, TValue val, bool canReplace)
         {
-            if (countUsed == growAt) ResizeNext();
+            if (countUsed == growAt) {
+                if ( ! ResizeNext()) return false;
+            }
 
             return PutInternal(new Entry(GetHash(key), key, val), canReplace, true);
         }
@@ -157,7 +159,8 @@
                 if (checkDuplicates && (entry.hash == current.Value.hash) &&
                     KeyComparer(entry.key, current.Value.key))
                 {
-                    if (!canReplace) return false;
+                    if (!canReplace)
+                        return false;
 
                     buckets.Set(indexCurrent, entry);
                     return true;
@@ -167,7 +170,8 @@
                 if (probeCurrent > probeDistance)
                 {
                     probeCurrent = probeDistance;
-                    if (!Swap(buckets,indexCurrent, ref entry)) return false;
+                    if (!Swap(buckets,indexCurrent, ref entry))
+                        return false;
                 }
                 probeCurrent++;
             }
@@ -245,6 +249,8 @@
         private bool ResizeNext()
         {
             return Resize(count == 0 ? 1 : count*2);
+            //var size = NextPow2(count*2);
+            //return Resize(count == 0 ? 1 : size);
         }
 
         private static uint NextPow2(uint c)
