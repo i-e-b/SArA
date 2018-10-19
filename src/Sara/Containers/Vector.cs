@@ -21,7 +21,7 @@
         /// This is dynamically sizes, so large values won't use extra memory for small arrays.
         /// This limits the memory growth of larger arrays. Be careful that it's not bigger than an arena (keep it under 1000)
         /// </summary>
-        public const int SKIP_TABLE_SIZE_LIMIT = 256;
+        public const int SKIP_TABLE_SIZE_LIMIT = 128;
 
         public const int PTR_SIZE = sizeof(long);
         public const int INDEX_SIZE =  sizeof(uint);
@@ -228,6 +228,13 @@
                 uint endChunkIdx = (uint)((_elementCount - 1) / ElemsPerChunk);
 
                 // 2. Optimise for start- and end- of chain (small lists & very likely for Push & Pop)
+                if (targetChunkIdx == 0)
+                { // start of chain
+                    found = true;
+                    chunkPtr = _baseChunkTable;
+                    chunkIndex = targetChunkIdx;
+                    return;
+                }
                 if (_elementCount == 0 || targetChunkIdx == endChunkIdx)
                 { // lands in a chunk
                     found = true;
@@ -239,13 +246,6 @@
                 { // lands outside a chunk -- off the end
                     found = false;
                     chunkPtr = _endChunkPtr;
-                    chunkIndex = targetChunkIdx;
-                    return;
-                }
-                if (targetChunkIdx == 0)
-                { // start of chain
-                    found = true;
-                    chunkPtr = _baseChunkTable;
                     chunkIndex = targetChunkIdx;
                     return;
                 }
@@ -266,9 +266,6 @@
                     var lower = guess - 2;
                     if (upper > _skipEntries) upper = _skipEntries;
                     if (lower < 0) lower = 0;
-                    
-                    //var upper = _skipEntries;
-                    //var lower = 0;
 
                     // binary search for the best chunk
                     while (lower < upper) {
@@ -285,11 +282,6 @@
                     var baseAddr = _skipTable + (SKIP_ELEM_SIZE * lower); // pointer to skip table entry
                     startChunkIdx = _mem.Read<uint>(baseAddr);
                     chunkHeadPtr = _mem.Read<long>(baseAddr + INDEX_SIZE);
-
-                    if (startChunkIdx > targetChunkIdx) {
-                        // the math failed!
-                        throw new System.Exception($"Target failure. start = {startChunkIdx}; target = {targetChunkIdx}");
-                    }
                 }
 
                 var walk = targetChunkIdx - startChunkIdx;
@@ -374,28 +366,35 @@
         {
             TElement result;
             if (_elementCount == 0) return Result.Fail<TElement>();
-            if (_elementCount == 1) {
-                result = _mem.Read<TElement>(_baseChunkTable + ChunkHeaderSize);
-                _elementCount--;
-                return Result.Ok(result);
-            }
 
             var index = _elementCount - 1;
-            
             var entryIdx = index % ElemsPerChunk;
 
             // Get the value
             result = _mem.Read<TElement>(_endChunkPtr + ChunkHeaderSize + (ElementByteSize * entryIdx));
-            _elementCount--;
             
-            if (entryIdx < 1) // need to dealloc last chunk
+            if (entryIdx < 1 && _elementCount > 0) // need to dealloc end chunk
             {
-                FindNearestChunk(index - 1, out _, out var prevChunkPtr, out _);
+                FindNearestChunk(index - 1, out _, out var prevChunkPtr, out var deadChunkIdx);
                 _alloc.Deref(_endChunkPtr);
                 _endChunkPtr = prevChunkPtr;
                 _mem.Write<long>(prevChunkPtr, -1); // drop pointer in previous
-                _skipTableDirty = true;
+
+                if (_skipEntries > 0)
+                {
+                    // Check to see if we've made the skip list invalid
+                    var skipTableEnd = _mem.Read<uint>(_skipTable + (SKIP_ELEM_SIZE * (_skipEntries - 1)));
+
+                    // knock the last element off if it's too big. Then let the walk limit in FindNearestChunk set the dirty flag.
+                    if (skipTableEnd >= deadChunkIdx)
+                    {
+                        _skipEntries--;
+                    }
+                }
             }
+
+            // FindNearestChunk uses this, so we must decrement last
+            _elementCount--;
             return Result.Ok(result);
         }
 

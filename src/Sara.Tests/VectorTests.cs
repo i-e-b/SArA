@@ -29,7 +29,7 @@ namespace Sara.Tests
         }
 
         [Test]
-        public void results_are_stable ()
+        public void results_are_stable_over_get ()
         {
             var sara = new Vector<int>(new Allocator(0, Mega.Bytes(50)), new MemorySimulator(Mega.Bytes(50)));
 
@@ -48,6 +48,33 @@ namespace Sara.Tests
                 var res = sara.Get((uint)i);
                 if (!res.Success) Assert.Fail("Get failed at "+i);
                 if (res.Value != i) Assert.Fail("Wrong value at "+i);
+
+                saraSum -= res.Value;
+            }
+
+            Assert.That(saraSum, Is.Zero);
+        }
+        
+        [Test]
+        public void results_are_stable_over_pop ()
+        {
+            var sara = new Vector<int>(new Allocator(0, Mega.Bytes(50)), new MemorySimulator(Mega.Bytes(50)));
+
+            long saraSum = 0;
+            const int size = 500_000;//40*(3 + Vector<int>.SECOND_LEVEL_SKIPS) * Vector<int>.TARGET_ELEMS_PER_CHUNK;
+            Console.WriteLine("Size = " + size);
+
+            for (int i = 0; i < size; i++)
+            {
+                saraSum += i;
+                var res = sara.Push(i);
+                if (!res.Success) Assert.Fail("Push failed at "+i);
+            }
+            for (int i = size-1; i >= 0; i--)
+            {
+                var res = sara.Pop();
+                if (!res.Success) Assert.Fail("Pop failed at " + i);
+                if (res.Value != i) Assert.Fail("Wrong value at " + i);
 
                 saraSum -= res.Value;
             }

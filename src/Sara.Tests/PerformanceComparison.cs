@@ -133,6 +133,8 @@ namespace Sara.Tests
             }
             dotnet_time.Stop();
 
+            Assert.That(dotnetSum, Is.Zero, "dotnet result is unexpected");
+            Assert.That(saraSum, Is.Zero, "SArA result is unexpected");
             Assert.Pass("SArA: " + sara_time.Elapsed + " result = " + saraSum + "; dotnet: " + dotnet_time.Elapsed + " result = " + dotnetSum);
         }
 

@@ -57,7 +57,7 @@ namespace Sara.Tests
             var rnd = new Random();
             // we deliberately use a small initial size to stress the scaling.
             // if you can afford to oversize the map, that will make things a lot faster
-            var subject = new TaggedHashMap(10000, new Allocator(0, Mega.Bytes(50)), new MemorySimulator(Mega.Bytes(50)));
+            var subject = new TaggedHashMap(100000, new Allocator(0, Mega.Bytes(50)), new MemorySimulator(Mega.Bytes(50)));
 
             subject.Add(0, 1);
             for (int i = 0; i < /*100000*/ 25000; i++) // 25'000 should be under a second
