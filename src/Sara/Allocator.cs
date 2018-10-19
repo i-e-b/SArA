@@ -212,7 +212,7 @@
         /// Pass in an exhaustive list of referenced pointers. Any arenas
         /// with no referenced pointers will be immediately reset
         /// </summary>
-        public void ScanAndSweep(long[] referenceList)
+        public void ScanAndSweep(Vector<long> referenceList)
         {
             // mark all arenas zero referenced
             for (int i = 0; i < _arenaCount; i++)
@@ -221,9 +221,9 @@
             }
 
             // increment for each reference
-            for (int i = 0; i < referenceList.Length; i++)
+            for (uint i = 0; i < referenceList.Length(); i++)
             {
-                var a = ArenaForPtr(referenceList[i]);
+                var a = ArenaForPtr(referenceList.Get(i).Value);
                 if (a.Success)
                 {
                     var refC = GetRefCount(a.Value);

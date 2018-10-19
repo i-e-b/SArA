@@ -142,7 +142,10 @@ namespace Sara.Tests
             Assert.That(subject.GetArenaOccupation(ar2).Value, Is.Not.Zero);
 
             // Run the scan (note we don't need all pointers, just one from each arena)
-            subject.ScanAndSweep(new []{ x1, x2 });
+            var list = new Vector<long>(subject, mem);
+            list.Push(x1);
+            list.Push(x2);
+            subject.ScanAndSweep(list);
             
             // Check nothing has been cleared
             Assert.That(subject.GetArenaOccupation(ar1).Value, Is.Not.Zero);
@@ -171,7 +174,9 @@ namespace Sara.Tests
             Assert.That(subject.GetArenaOccupation(ar2).Value, Is.Not.Zero);
 
             // Run the scan (only including the second arena)
-            subject.ScanAndSweep(new []{ x2 });
+            var list = new Vector<long>(subject, mem);
+            list.Push(x2);
+            subject.ScanAndSweep(list);
             
             // Check nothing has been cleared
             Assert.That(subject.GetArenaOccupation(ar1).Value, Is.Zero, "Unreferenced arena was not reset");
@@ -223,9 +228,6 @@ namespace Sara.Tests
             Assert.That(subject.CurrentArena(), Is.GreaterThanOrEqualTo(1000));
             Assert.That(result.Value, Is.GreaterThan(Giga.Bytes(1)));
             
-            // Test a scan
-            subject.ScanAndSweep(new long[0]);
-            Assert.That(subject.CurrentArena(), Is.Zero);
         }
 
         [Test]

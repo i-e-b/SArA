@@ -496,20 +496,20 @@
         /// <summary>
         /// Return all continue pointers, maybe needs to return all tags in MECS
         /// </summary>
-        public ulong[] References()
+        public Vector<ulong> References()
         {
             var index = _elementCount - 1;
             var maxChunkIdx = index / ElemsPerChunk;
             
-            var result = new ulong[maxChunkIdx + 1];
+            var result = new Vector<ulong>(_alloc, _mem);
             var chunkHeadPtr = _baseChunkTable;
             for (int i = 0; i < maxChunkIdx; i++)
             {
-                result[i] = (ulong) chunkHeadPtr;
+                result.Push((ulong) chunkHeadPtr);
                 chunkHeadPtr = _mem.Read<long>(chunkHeadPtr);
                 if (chunkHeadPtr <= 0) break;
             }
-            result[result.Length-1] = (ulong) _skipTable;
+            result.Push((ulong) _skipTable);
 
             return result;
         }

@@ -42,7 +42,6 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Allocator.cs" />
-    <Compile Include="Arena.cs" />
     <Compile Include="Containers\IGcContainer.cs" />
     <Compile Include="IMemoryAccess.cs" />
     <Compile Include="Helpers\MemorySimulator.cs" />

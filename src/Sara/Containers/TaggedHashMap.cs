@@ -265,7 +265,6 @@
 
         private uint DistanceToInitIndex(uint indexStored)
         {
-            //Debug.Assert(buckets[indexStored].hash != 0);
 
             var indexInit = buckets.Get(indexStored).Value.hash & countMod;
             if (indexInit <= indexStored) return indexStored - indexInit;
@@ -304,7 +303,7 @@
             vec.Swap(idx1, idx2);
         }
         
-        public KVP[] AllEntries()
+        public Vector<KVP> AllEntries()
         {
             var size = 0;
             for (uint i = 0; i < count; i++) {
@@ -312,16 +311,14 @@
                 if (res.Success && res.Value.hash != 0) size++;
             }
 
-            var result = new KVP[size];
-            int j = 0;
+            var result = new Vector<KVP>(_alloc, _mem);
 
             for (uint i = 0; i < count; i++)
             {
                 var ent = buckets.Get(i);
                 if (ent.Value.hash == 0) continue;
 
-                result[j] = new KVP(ent.Value.key, ent.Value.value);
-                j++;
+                result.Push(new KVP(ent.Value.key, ent.Value.value));
             }
             return result;
         }
@@ -351,17 +348,18 @@
             return countUsed;
         }
 
-        public ulong[] References()
+        public Vector<ulong> References()
         {
             var everything = AllEntries();
             // TODO: filter pointers here, or let MECS do it?
             // Also, how do we host the GC-reference-list itself? Do we create a special one, ignore its references and immediately abandon?
-            var result = new ulong[everything.Length * 2];
-            for (int i = 0; i < everything.Length; i++)
+            var result = new Vector<ulong>(_alloc, _mem);
+            for (uint i = 0; i < everything.Length(); i++)
             {
-                result[i] = everything[i].Value;
-                result[i*2] = everything[i].Key;
+                result.Push(everything.Get(i).Value.Value);
+                result.Push(everything.Get(i).Value.Key);
             }
+            everything.Deallocate();
             return result;
         }
 
