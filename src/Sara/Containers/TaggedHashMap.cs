@@ -85,7 +85,10 @@
             var oldBuckets = buckets;
 
             count = newSize;
+            if (newSize > 0 && newSize < 32) newSize = 32;
+
             countMod = newSize - 1;
+
             buckets = new Vector<Entry>(_alloc, _mem);
             if ( ! buckets.IsValid) return false;
             if ( ! buckets.Prealloc(newSize).Success) return false;
@@ -95,8 +98,11 @@
 
             countUsed = 0;
 
-            if ((oldCount <= 0) || (newSize == 0) || oldBuckets == null) return true;
-
+            if (oldBuckets == null) return true;
+            if ((oldCount <= 0) || (newSize == 0)) {
+                oldBuckets.Deallocate();
+                return true;
+            }
 
             for (uint i = 0; i < oldCount; i++) {
                 var res = oldBuckets.Get(i);
@@ -106,6 +112,13 @@
 
             oldBuckets.Deallocate();
             return true;
+        }
+
+        private bool ResizeNext()
+        {
+            return Resize(count == 0 ? 32 : count*2);
+            //var size = NextPow2(count*2);
+            //return Resize(count == 0 ? 1 : size);
         }
 
         public bool Get(TKey key, out TValue value)
@@ -127,6 +140,7 @@
             value = default;
             return false;
         }
+
 
         public bool Put(TKey key, TValue val, bool canReplace)
         {
@@ -175,7 +189,7 @@
                 }
                 probeCurrent++;
             }
-
+            // need to grow?
             return false;
         }
 
@@ -246,12 +260,6 @@
             return indexStored + (count - indexInit);
         }
 
-        private bool ResizeNext()
-        {
-            return Resize(count == 0 ? 1 : count*2);
-            //var size = NextPow2(count*2);
-            //return Resize(count == 0 ? 1 : size);
-        }
 
         private static uint NextPow2(uint c)
         {
