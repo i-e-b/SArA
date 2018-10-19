@@ -53,9 +53,10 @@
             }
         }
 
-
-        private const float LOAD_FACTOR = 0.8f; // higher is more memory efficient. Lower is faster, to a point.
-        private const uint SAFE_HASH = 0x80000000; // just in case you get a zero result
+        public const uint MAX_BUCKET_SIZE = int.MaxValue; // safety limit for scaling the buckets
+        public const uint MIN_BUCKET_SIZE = 64; // default size used if none given
+        public const float LOAD_FACTOR = 0.8f; // higher is more memory efficient. Lower is faster, to a point.
+        public const uint SAFE_HASH = 0x8000_0000; // just in case you get a zero result
 
         private Vector<Entry> buckets;
         private uint count;
@@ -76,7 +77,7 @@
         {
             _alloc = alloc;
             _mem = mem;
-            Resize(NextPow2(size), false);
+            Resize((uint)NextPow2(size), false);
         }
 
         private bool Resize(uint newSize, bool auto = true)
@@ -85,7 +86,9 @@
             var oldBuckets = buckets;
 
             count = newSize;
-            if (newSize > 0 && newSize < 32) newSize = 32;
+            if (newSize > 0 && newSize < MIN_BUCKET_SIZE) newSize = MIN_BUCKET_SIZE;
+            if (newSize > MAX_BUCKET_SIZE)
+                newSize = MAX_BUCKET_SIZE;
 
             countMod = newSize - 1;
 
@@ -116,9 +119,16 @@
 
         private bool ResizeNext()
         {
-            return Resize(count == 0 ? 32 : count*2);
-            //var size = NextPow2(count*2);
-            //return Resize(count == 0 ? 1 : size);
+            // mild scaling can save memory, but resizing is very expensive -- so the default is an aggressive algorithm
+
+            // Mild scaling
+            //return Resize(count == 0 ? 32 : count*2);
+
+            // Aggressive scaling
+            ulong size = (ulong)count * 2;
+            if (count < 8192) size = (ulong)count * count;
+            if (size < MIN_BUCKET_SIZE) size = MIN_BUCKET_SIZE;
+            return Resize((uint)size);
         }
 
         public bool Get(TKey key, out TValue value)
@@ -144,7 +154,7 @@
 
         public bool Put(TKey key, TValue val, bool canReplace)
         {
-            if (countUsed == growAt) {
+            if (countUsed >= growAt) {
                 if ( ! ResizeNext()) return false;
             }
 
@@ -190,7 +200,9 @@
                 probeCurrent++;
             }
             // need to grow?
-            return false;
+            // Trying recursive insert:
+            if (!ResizeNext()) return false;
+            return PutInternal(entry, canReplace, checkDuplicates);
         }
 
         private bool Find(TKey key, out uint index)
@@ -261,7 +273,7 @@
         }
 
 
-        private static uint NextPow2(uint c)
+        private static ulong NextPow2(ulong c)
         {
             c--;
             c |= c >> 1;
@@ -269,6 +281,7 @@
             c |= c >> 4;
             c |= c >> 8;
             c |= c >> 16;
+            c |= c >> 32;
             return ++c;
         }
         
@@ -333,7 +346,10 @@
             Resize(0);
         }
 
-        public int Count => (int) countUsed;
+        public uint Count()
+        {
+            return countUsed;
+        }
 
         public ulong[] References()
         {
