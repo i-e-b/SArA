@@ -5,7 +5,7 @@ namespace StressTestingApp
 {
     class Program
     {
-        public const int TestSize = 10_000_000;
+        public const int TestSize = 10_000_000; // large enough to keep the program running for a while
         static void Main(string[] args)
         {
             var RamSize = Giga.Bytes(1);

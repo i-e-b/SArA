@@ -8,24 +8,25 @@
     /// <typeparam name="TElement">A simple type that can be serialised to a byte array</typeparam>
     public class Vector<TElement> : IGcContainer where TElement: unmanaged 
     {
-        // Tuning parameters:
+        // Fixed sizes -- these are structural to the code and must not change
+        public const int PTR_SIZE = sizeof(long);
+        public const int INDEX_SIZE =  sizeof(uint);
+        public const int SKIP_ELEM_SIZE = INDEX_SIZE + PTR_SIZE;
 
+
+        // Tuning parameters: have a play if you have performance or memory issues.
         /// <summary>
         /// Desired maximum elements per chunk. This will be reduced if TElement is large (to fit in Arena limit)
         /// Larger values are significantly faster for big arrays, but more memory-wasteful on small arrays
         /// </summary>
-        public const int TARGET_ELEMS_PER_CHUNK = 32;
+        public const int TARGET_ELEMS_PER_CHUNK = 64;
 
         /// <summary>
         /// Maximum size of the skip table.
         /// This is dynamically sizes, so large values won't use extra memory for small arrays.
-        /// This limits the memory growth of larger arrays. Be careful that it's not bigger than an arena (keep it under 1000)
-        /// </summary>
-        public const int SKIP_TABLE_SIZE_LIMIT = 128;
-
-        public const int PTR_SIZE = sizeof(long);
-        public const int INDEX_SIZE =  sizeof(uint);
-        public const int SKIP_ELEM_SIZE = INDEX_SIZE + PTR_SIZE;
+        /// This limits the memory growth of larger arrays. If it's bigger that an arena, everything will fail.
+        /// </summary><remarks>The maximum size is (Allocator.ArenaSize / SKIP_ELEM_SIZE), or about 5461</remarks>
+        public const long SKIP_TABLE_SIZE_LIMIT = 1024;
 
         /*
          * Structure of the element chunk:
@@ -170,6 +171,7 @@
                     return;
                 }
 
+                // Guess a reasonable size for the skip table
                 var entries = (chunkTotal < SKIP_TABLE_SIZE_LIMIT) ? chunkTotal : SKIP_TABLE_SIZE_LIMIT;
 
                 // General case: not every chunk will fit in the skip table
