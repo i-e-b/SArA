@@ -1,7 +1,7 @@
 ﻿namespace Sara
 {
     /// <summary>
-    /// Structure of an arena (to be used later)
+    /// Structure of an arena
     /// </summary>
     public struct Arena {
         // Base is implied by index

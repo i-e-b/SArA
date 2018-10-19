@@ -55,7 +55,7 @@
         public readonly int ElemsPerChunk;
         public readonly int ElementByteSize;
         public readonly int ChunkHeaderSize;
-        public readonly int ChunkBytes;
+        public readonly ushort ChunkBytes;
 
         private readonly Allocator _alloc;
         private readonly IMemoryAccess _mem;
@@ -108,7 +108,7 @@
             if (ElemsPerChunk > TARGET_ELEMS_PER_CHUNK)
                 ElemsPerChunk = TARGET_ELEMS_PER_CHUNK; // no need to go crazy with small items.
 
-            ChunkBytes = (ChunkHeaderSize) + (ElemsPerChunk * ElementByteSize);
+            ChunkBytes = (ushort) ((ChunkHeaderSize) + (ElemsPerChunk * ElementByteSize));
 
 
 
@@ -177,7 +177,7 @@
                 // General case: not every chunk will fit in the skip table
                 // Find representative chunks using the existing table.
                 // (finding will be a combination of search and scan)
-                var newTable = _alloc.Alloc(SKIP_ELEM_SIZE * entries);
+                var newTable = _alloc.Alloc((ushort) (SKIP_ELEM_SIZE * entries));
                 if (!newTable.Success) { _rebuilding = false; return; } // live with the old one
                 var newTablePtr = newTable.Value;
 

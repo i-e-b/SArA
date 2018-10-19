@@ -11,7 +11,8 @@ namespace StressTestingApp
             var RamSize = Giga.Bytes(1);
             var rnd = new Random();
 
-            var subject = new TaggedHashMap(TestSize, new Allocator(0, RamSize), new MemorySimulator(RamSize));
+            var mem = new MemorySimulator(RamSize);
+            var subject = new TaggedHashMap(TestSize, new Allocator(0, RamSize, mem), mem);
             
             Console.WriteLine("running...");
 

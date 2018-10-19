@@ -14,7 +14,8 @@ namespace Sara.Tests
         [Test]
         public void can_store_and_read_array_elements ()
         {
-            var subject = new Vector<SampleElement>(new Allocator(0, Mega.Bytes(1)), new MemorySimulator(Mega.Bytes(1)));
+            var mem = new MemorySimulator(Mega.Bytes(1));
+            var subject = new Vector<SampleElement>(new Allocator(0, Mega.Bytes(1), mem), mem);
 
             Assert.That(subject.Length(), Is.Zero);
 
@@ -31,7 +32,8 @@ namespace Sara.Tests
         [Test]
         public void results_are_stable_over_get ()
         {
-            var sara = new Vector<int>(new Allocator(0, Mega.Bytes(50)), new MemorySimulator(Mega.Bytes(50)));
+            var mem = new MemorySimulator(Mega.Bytes(50));
+            var sara = new Vector<int>(new Allocator(0, Mega.Bytes(50), mem), mem);
 
             long saraSum = 0;
             const int size = 500_000;//40*(3 + Vector<int>.SECOND_LEVEL_SKIPS) * Vector<int>.TARGET_ELEMS_PER_CHUNK;
@@ -58,7 +60,8 @@ namespace Sara.Tests
         [Test]
         public void results_are_stable_over_pop ()
         {
-            var sara = new Vector<int>(new Allocator(0, Mega.Bytes(50)), new MemorySimulator(Mega.Bytes(50)));
+            var mem = new MemorySimulator(Mega.Bytes(50));
+            var sara = new Vector<int>(new Allocator(0, Mega.Bytes(50), mem), mem);
 
             long saraSum = 0;
             const int size = 500_000;//40*(3 + Vector<int>.SECOND_LEVEL_SKIPS) * Vector<int>.TARGET_ELEMS_PER_CHUNK;
@@ -86,7 +89,8 @@ namespace Sara.Tests
         public void can_create_a_vector_larger_than_the_arena_limit()
         {
             var memsize = Mega.Bytes(1);
-            var subject = new Vector<SampleElement>(new Allocator(0, memsize), new MemorySimulator(memsize));
+            var mem = new MemorySimulator(memsize);
+            var subject = new Vector<SampleElement>(new Allocator(0, memsize, mem), mem);
 
             uint full = (uint) (Allocator.ArenaSize / sizeof(long)) * 2;
 
@@ -106,7 +110,8 @@ namespace Sara.Tests
         [Test]
         public void popping_the_last_item_from_a_list_gives_its_value ()
         {
-            var subject = new Vector<SampleElement>(new Allocator(0, Mega.Bytes(1)), new MemorySimulator(Mega.Bytes(1)));
+            var mem = new MemorySimulator(Mega.Bytes(1));
+            var subject = new Vector<SampleElement>(new Allocator(0, Mega.Bytes(1), mem), mem);
 
             Assert.That(subject.Length(), Is.Zero);
 
@@ -125,8 +130,9 @@ namespace Sara.Tests
         {
             // Setup, and allocate a load of entries
             var memsize = Mega.Bytes(1);
-            var alloc = new Allocator(0, memsize);
-            var subject = new Vector<SampleElement>(alloc, new MemorySimulator(memsize));
+            var mem = new MemorySimulator(memsize);
+            var alloc = new Allocator(0, memsize, mem);
+            var subject = new Vector<SampleElement>(alloc, mem);
 
             int full = (int) (Allocator.ArenaSize / sizeof(long)) * 2;
 
@@ -163,8 +169,9 @@ namespace Sara.Tests
         {
             // Setup, and allocate a load of entries
             var memsize = Mega.Bytes(1);
-            var alloc = new Allocator(0, memsize);
-            var subject = new Vector<SampleElement>(alloc, new MemorySimulator(memsize));
+            var mem = new MemorySimulator(memsize);
+            var alloc = new Allocator(0, memsize, mem);
+            var subject = new Vector<SampleElement>(alloc, mem);
 
             int full = (int) (Allocator.ArenaSize / sizeof(long)) * 2;
 
@@ -187,7 +194,8 @@ namespace Sara.Tests
         [Test]
         public void can_add_elements_after_removing_them ()
         {
-            var subject = new Vector<SampleElement>(new Allocator(0, Mega.Bytes(1)), new MemorySimulator(Mega.Bytes(1)));
+            var mem = new MemorySimulator(Mega.Bytes(1));
+            var subject = new Vector<SampleElement>(new Allocator(0, Mega.Bytes(1), mem), mem);
 
             Assert.That(subject.Length(), Is.Zero);
 
@@ -206,9 +214,10 @@ namespace Sara.Tests
         [Test]
         public void add_and_removing_elements_works_with_pre_existing_allocations ()
         {
-            var alloc = new Allocator(0, Mega.Bytes(1));
+            var mem = new MemorySimulator(Mega.Bytes(1));
+            var alloc = new Allocator(0, Mega.Bytes(1), mem);
             alloc.Alloc(174);
-            var subject = new Vector<SampleElement>(alloc, new MemorySimulator(Mega.Bytes(1)));
+            var subject = new Vector<SampleElement>(alloc, mem);
 
             Assert.That(subject.Length(), Is.Zero);
 
@@ -227,7 +236,8 @@ namespace Sara.Tests
         [Test]
         public void can_overwrite_entries_by_explicit_index ()
         {
-            var subject = new Vector<SampleElement>(new Allocator(0, Mega.Bytes(1)), new MemorySimulator(Mega.Bytes(1)));
+            var mem = new MemorySimulator(Mega.Bytes(1));
+            var subject = new Vector<SampleElement>(new Allocator(0, Mega.Bytes(1), mem), mem);
 
             Assert.That(subject.Length(), Is.Zero);
 
@@ -245,7 +255,8 @@ namespace Sara.Tests
         [Test]
         public void can_preallocate_space_in_the_vector ()
         {
-            var subject = new Vector<SampleElement>(new Allocator(0, Mega.Bytes(1)), new MemorySimulator(Mega.Bytes(1)));
+            var mem = new MemorySimulator(Mega.Bytes(1));
+            var subject = new Vector<SampleElement>(new Allocator(0, Mega.Bytes(1), mem), mem);
 
             Assert.That(subject.Length(), Is.Zero);
 
@@ -267,9 +278,14 @@ namespace Sara.Tests
         {
             Console.WriteLine(Allocator.ArenaSize);
 
-            var structVector = new Vector<SampleElement>(new Allocator(0, Kilo.Bytes(80)), new MemorySimulator(Kilo.Bytes(80)));
-            var bigStructVector = new Vector<HugeStruct>(new Allocator(0, Kilo.Bytes(80)), new MemorySimulator(Kilo.Bytes(80)));
-            var byteVector = new Vector<byte>(new Allocator(0, Kilo.Bytes(80)), new MemorySimulator(Kilo.Bytes(80)));
+
+            var mem_a = new MemorySimulator(Kilo.Bytes(80));
+            var mem_b = new MemorySimulator(Kilo.Bytes(80));
+            var mem_c = new MemorySimulator(Kilo.Bytes(80));
+
+            var structVector    = new Vector<SampleElement>(new Allocator(0, Kilo.Bytes(80), mem_a), mem_a);
+            var bigStructVector = new Vector<HugeStruct>   (new Allocator(0, Kilo.Bytes(80), mem_b), mem_b);
+            var byteVector      = new Vector<byte>         (new Allocator(0, Kilo.Bytes(80), mem_c), mem_c);
 
             Assert.That(byteVector.ElemsPerChunk, Is.LessThan(70));   // Not too big on small elements
             Assert.That(structVector.ElemsPerChunk, Is.GreaterThan(30));
@@ -279,7 +295,8 @@ namespace Sara.Tests
         [Test]
         public void can_swap_two_elements_by_index ()
         {
-            var subject = new Vector<SampleElement>(new Allocator(0, Mega.Bytes(1)), new MemorySimulator(Mega.Bytes(1)));
+            var mem = new MemorySimulator(Mega.Bytes(1));
+            var subject = new Vector<SampleElement>(new Allocator(0, Mega.Bytes(1), mem), mem);
             
             uint length = (uint) (subject.ElemsPerChunk * 2);
 
@@ -304,8 +321,9 @@ namespace Sara.Tests
         [Test] // stress test
         public void can_handle_a_large_number_of_pushes_in_reasonable_time ()
         {
-            var alloc = new Allocator(0, Mega.Bytes(10));
-            var subject = new Vector<uint>(alloc, new MemorySimulator(Mega.Bytes(10)));
+            var mem = new MemorySimulator(Mega.Bytes(10));
+            var alloc = new Allocator(0, Mega.Bytes(10), mem);
+            var subject = new Vector<uint>(alloc, mem);
 
             Assert.That(subject.Length(), Is.Zero);
 

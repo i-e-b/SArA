@@ -8,10 +8,10 @@
         /// <summary>
         /// Size of each arena in bytes. This is the maximum allocation size
         /// </summary>
-        public const long ArenaSize = ushort.MaxValue;
+        public const long ArenaSize = ushort.MaxValue; // 64K
 
         /// <summary>
-        /// Bottom of memory
+        /// Bottom of free memory (after arena management is taken up)
         /// </summary>
         private readonly long _start;
 
@@ -21,9 +21,21 @@
         private readonly long _limit;
 
         /// <summary>
-        /// Metadata records for all the arenas
+        /// Abstract interface to memory state
         /// </summary>
-        private readonly Arena[] _meta;
+        private readonly IMemoryAccess _memory;
+
+        /// <summary>
+        /// Pointer to array of ushort, length is equal to _arenaCount.
+        /// Each element is offset of next pointer to allocate. Zero indicates an empty arena.
+        /// </summary>
+        private readonly long _headsPtr;
+
+        /// <summary>
+        /// Pointer to array of ushort, length is equal to _arenaCount.
+        /// Each element is number of references claimed against the arena.
+        /// </summary>
+        private readonly long _refCountsPtr;
 
         /// <summary>
         /// The most recent arena that had a successful alloc or clear
@@ -39,12 +51,13 @@
         /// Start a new allocator.
         /// This tracks memory usage, but does not do any physical work
         /// </summary>
-        /// <param name="start">Start of allocation space (bytes)</param>
+        /// <param name="start">Start of space (bytes) available to the allocator. Some will be reserved for arena tracking</param>
         /// <param name="limit">Maximum memory before an out-of-memory condition is flagged (bytes)</param>
-        public Allocator(long start, long limit)
+        /// <param name="memory">Access to real or simulated memory</param>
+        public Allocator(long start, long limit, IMemoryAccess memory)
         {
-            _start = start;
             _limit = limit;
+            _memory = memory;
 
             // with 64KB arenas (ushort) and 1GB of RAM, we get 16384 arenas.
             // recording only heads and refs would take 64KB of management space
@@ -52,7 +65,36 @@
             // This seems pretty reasonable.
             _arenaCount = (int)( (_limit - _start) / ArenaSize );
             _currentArena = 0;
-            _meta = new Arena[_arenaCount];
+
+            // Allow space for arena tables, store adjusted base
+            var sizeOfTables = sizeof(ushort) * _arenaCount;
+            _headsPtr = start;
+            _refCountsPtr = start + sizeOfTables;
+
+            _start = start + (sizeOfTables * 2);
+
+            // zero-out the tables
+            var zptr = _headsPtr;
+            while (zptr < _start)
+            {
+                _memory.Write<ushort>(zptr, 0);
+                zptr += sizeof(ushort);
+            }
+
+        }
+
+        private ushort GetHead(int arenaIndex) {
+            return _memory.Read<ushort>(_headsPtr + (arenaIndex * sizeof(ushort)));
+        }
+        private ushort GetRefCount(int arenaIndex) {
+            return _memory.Read<ushort>(_refCountsPtr + (arenaIndex * sizeof(ushort)));
+        }
+        
+        private void SetHead(int arenaIndex, ushort val) {
+            _memory.Write<ushort>(_headsPtr + (arenaIndex * sizeof(ushort)), val);
+        }
+        private void SetRefCount(int arenaIndex, ushort val) {
+            _memory.Write<ushort>(_refCountsPtr + (arenaIndex * sizeof(ushort)), val);
         }
 
         /// <summary>
@@ -72,13 +114,15 @@
             {
                 var i = (seq + _currentArena) % _arenaCount; // simple scan from last active, looping back if needed
 
-                if (_meta[i].Head > maxOff) continue;
+                if (GetHead(i) > maxOff) continue;
 
                 // found a slot where it will fit
                 _currentArena = i;
-                var result = _meta[i].Head; // new pointer
-                _meta[i].Head += (ushort)byteCount; // advance pointer to end of allocated data
-                _meta[i].RefCount++; // increase arena ref count
+                ushort result = GetHead(i); // new pointer
+                SetHead(i, (ushort) (result + byteCount)); // advance pointer to end of allocated data
+
+                var oldRefs = GetRefCount(i);
+                SetRefCount(i, (ushort) (oldRefs + 1)); // increase arena ref count
 
                 return Result.Ok(result + (i * ArenaSize) + _start); // turn the offset into an absolute position
             }
@@ -97,9 +141,10 @@
             if ( ! res.Success) return Result.Fail<Unit>();
             var arena = res.Value;
 
-            if (_meta[arena].RefCount == ushort.MaxValue) return Result.Fail<Unit>(); // saturated references. Fix your code.
+            var oldRefs = GetRefCount(arena);
+            if (oldRefs == ushort.MaxValue) return Result.Fail<Unit>(); // saturated references. Fix your code.
 
-            _meta[arena].RefCount++;
+            SetRefCount(arena, (ushort) (oldRefs + 1));
             return Result.Ok();
         }
 
@@ -112,15 +157,15 @@
             if ( ! res.Success) return Result.Fail<Unit>();
             var arena = res.Value;
 
-            var refCount = _meta[arena].RefCount;
+            var refCount = GetRefCount(arena);
             if (refCount == 0) return Result.Fail<Unit>(); // Overfree. Fix your code.
 
             refCount--;
-            _meta[arena].RefCount = refCount;
+            SetRefCount(arena, refCount);
 
             // If no more references, free the block
             if (refCount == 0) {
-                _meta[arena].Head = 0;
+                SetHead(arena, 0);
                 if (arena < _currentArena) _currentArena = arena; // keep allocations packed in low memory. Is this worth it?
             }
             return Result.Ok();
@@ -149,7 +194,7 @@
         public Result<int> GetArenaOccupation(int arena)
         {
             if (arena < 0 || arena >= _arenaCount) return Result.Fail<int>();
-            return Result.Ok((int)_meta[arena].Head);
+            return Result.Ok((int)GetHead(arena));
         }
         
         /// <summary>
@@ -159,7 +204,7 @@
         public Result<int> ArenaRefCount(int arena)
         {
             if (arena < 0 || arena >= _arenaCount) return Result.Fail<int>();
-            return Result.Ok((int)_meta[arena].RefCount);
+            return Result.Ok((int)GetRefCount(arena));
         }
 
         /// <summary>
@@ -172,7 +217,7 @@
             // mark all arenas zero referenced
             for (int i = 0; i < _arenaCount; i++)
             {
-                _meta[i].RefCount = 0;
+                SetRefCount(i, 0);
             }
 
             // increment for each reference
@@ -181,16 +226,17 @@
                 var a = ArenaForPtr(referenceList[i]);
                 if (a.Success)
                 {
-                    _meta[a.Value].RefCount++;
+                    var refC = GetRefCount(a.Value);
+                    SetRefCount(a.Value, (ushort) (refC + 1));
                 }
             }
 
             // reset any arenas still zeroed
-            for (int i = 0; i < _arenaCount; i++)
+            for (int i = _arenaCount - 1; i >= 0; i--)
             {
-                if (_meta[i].RefCount == 0) {
-                    _meta[i].Head = 0;
-                    if (i < _currentArena) _currentArena = i; // keep allocations packed in low memory
+                if (GetRefCount(i) == 0) {
+                    SetHead(i, 0);
+                    _currentArena = i; // keep allocations packed in low memory
                 }
             }
         }
@@ -215,14 +261,15 @@
 
             for (int i = 0; i < _arenaCount; i++)
             {
-                var arena = _meta[i];
-                totalReferenceCount += arena.RefCount;
+                var arenaRefCount = GetRefCount(i);
+                var arenaHead = GetHead(i);
+                totalReferenceCount += arenaRefCount;
 
-                if (arena.Head > 0) occupiedArenas++;
+                if (arenaHead > 0) occupiedArenas++;
                 else emptyArenas++;
 
-                var free = ArenaSize - arena.Head;
-                allocatedBytes += arena.Head;
+                var free = ArenaSize - arenaHead;
+                allocatedBytes += arenaHead;
                 unallocatedBytes += free;
                 if (free > largestContiguous) largestContiguous = free;
             }

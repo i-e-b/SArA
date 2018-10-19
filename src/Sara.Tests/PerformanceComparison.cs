@@ -19,7 +19,8 @@ namespace Sara.Tests
             var sara_time = new Stopwatch();
             var dotnet_time = new Stopwatch();
 
-            var sara = new TaggedHashMap(0, new Allocator(0, Mega.Bytes(50)), new MemorySimulator(Mega.Bytes(50)));
+            var mem = new MemorySimulator(Mega.Bytes(50));
+            var sara = new TaggedHashMap(0, new Allocator(0, Mega.Bytes(50), mem), mem);
             var dotnet = new Dictionary<ulong, ulong>(0);
 
             sara_time.Start();
@@ -56,7 +57,8 @@ namespace Sara.Tests
             var sara_time = new Stopwatch();
             var dotnet_time = new Stopwatch();
 
-            var sara = new Vector<int>(new Allocator(0, Mega.Bytes(50)), new MemorySimulator(Mega.Bytes(50)));
+            var mem = new MemorySimulator(Mega.Bytes(50));
+            var sara = new Vector<int>(new Allocator(0, Mega.Bytes(50), mem), mem);
             var dotnet = new List<int>();
 
             sara_time.Start();
@@ -103,7 +105,8 @@ namespace Sara.Tests
             var sara_time = new Stopwatch();
             var dotnet_time = new Stopwatch();
 
-            var sara = new Vector<int>(new Allocator(0, Mega.Bytes(50)), new MemorySimulator(Mega.Bytes(50)));
+            var mem = new MemorySimulator(Mega.Bytes(50));
+            var sara = new Vector<int>(new Allocator(0, Mega.Bytes(50), mem), mem);
             var dotnet = new Stack<int>();
 
             sara_time.Start();
@@ -144,7 +147,8 @@ namespace Sara.Tests
             var sara_time = new Stopwatch();
             var dotnet_time = new Stopwatch();
 
-            var sara = new Vector<int>(new Allocator(0, Mega.Bytes(50)), new MemorySimulator(Mega.Bytes(50)));
+            var mem = new MemorySimulator(Mega.Bytes(50));
+            var sara = new Vector<int>(new Allocator(0, Mega.Bytes(50), mem), mem);
             var dotnet = new LinkedList<int>();
 
             sara_time.Start();
