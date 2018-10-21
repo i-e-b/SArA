@@ -43,6 +43,7 @@
   <ItemGroup>
     <Compile Include="Allocator.cs" />
     <Compile Include="Containers\IGcContainer.cs" />
+    <Compile Include="Containers\Tree.cs" />
     <Compile Include="IMemoryAccess.cs" />
     <Compile Include="Helpers\MemorySimulator.cs" />
     <Compile Include="Helpers\Result.cs" />

@@ -51,6 +51,8 @@
     <Compile Include="PerformanceComparison.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="MemorySimulatorTests.cs" />
+    <Compile Include="SampleElement.cs" />
+    <Compile Include="TreeTests.cs" />
     <Compile Include="VectorTests.cs" />
   </ItemGroup>
   <ItemGroup>

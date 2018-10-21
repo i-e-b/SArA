@@ -15,7 +15,6 @@
         [System.Security.SuppressUnmanagedCodeSecurity]
         public unsafe T Read<T>(long location) where T: unmanaged 
         {
-
             fixed (byte* basePtr = &_data[location]) {
                 var tgt = (T*)basePtr;
                 return *tgt;
@@ -28,6 +27,28 @@
             fixed (byte* basePtr = &_data[location]) {
                 var tgt = (T*)basePtr;
                 *tgt = value;
+            }
+        }
+        
+        [System.Security.SuppressUnmanagedCodeSecurity]
+        public unsafe void WriteC<THead, TElement>(long location, THead head, TElement value) where THead : unmanaged where TElement : unmanaged
+        {
+            fixed (byte* basePtr = &_data[location]) {
+                var tgt = (THead*)basePtr;
+                *tgt = head;
+                var tgt2 = (TElement*)(basePtr + sizeof(THead));
+                *tgt2 = value;
+            }
+        }
+        
+        [System.Security.SuppressUnmanagedCodeSecurity]
+        public unsafe void ReadC<THead, TElement>(long location, out THead head, out TElement value) where THead : unmanaged where TElement : unmanaged
+        {
+            fixed (byte* basePtr = &_data[location]) {
+                var tgt = (THead*)basePtr;
+                head = *tgt;
+                var tgt2 = (TElement*)(basePtr + sizeof(THead));
+                value = *tgt2;
             }
         }
     }
@@ -49,7 +70,6 @@
         [System.Security.SuppressUnmanagedCodeSecurity]
         public unsafe T Read<T>(long location) where T: unmanaged 
         {
-
             fixed (byte* basePtr = &_data[location-_offset]) {
                 var tgt = (T*)basePtr;
                 return *tgt;
@@ -62,6 +82,28 @@
             fixed (byte* basePtr = &_data[location-_offset]) {
                 var tgt = (T*)basePtr;
                 *tgt = value;
+            }
+        }
+
+        public unsafe void WriteC<THead, TElement>(long location, THead head, TElement value) where THead : unmanaged where TElement : unmanaged
+        {
+            fixed (byte* basePtr = &_data[location - _offset])
+            {
+                var tgt = (THead*)basePtr;
+                *tgt = head;
+                var tgt2 = (TElement*)(basePtr + sizeof(THead));
+                *tgt2 = value;
+            }
+        }
+
+        public unsafe void ReadC<THead, TElement>(long location, out THead head, out TElement value) where THead : unmanaged where TElement : unmanaged
+        {
+            fixed (byte* basePtr = &_data[location - _offset])
+            {
+                var tgt = (THead*)basePtr;
+                head = *tgt;
+                var tgt2 = (TElement*)(basePtr + sizeof(THead));
+                value = *tgt2;
             }
         }
     }

@@ -343,16 +343,6 @@ namespace Sara.Tests
         }
 
 
-        // ReSharper disable UnusedMember.Global
-        public struct SampleElement {
-            public int a;
-            public double b;
-
-            public override string ToString()
-            {
-                return "a="+a+"; b="+b;
-            }
-        }
         public struct HugeStruct {
             public ReallyBigStruct a;
             public ReallyBigStruct b;

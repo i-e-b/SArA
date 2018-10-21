@@ -16,6 +16,7 @@ Beyond the MemorySimulator, there should be no heap-memory managed by .Net
 * [x] Generic variable vector (to help back hash table etc)
 * [x] Hash table
 * [x] Proper result handling
+* [ ] Tree structure (for syntax parsing etc. Probably as list-pairs (leafs and children)
 * [ ] GC scanning & reference listing
 
 ## Maybe:
