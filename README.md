@@ -17,6 +17,7 @@ Beyond the MemorySimulator, there should be no heap-memory managed by .Net
 * [x] Hash table
 * [x] Proper result handling
 * [ ] Tree structure (for syntax parsing etc. Probably as list-pairs (leafs and children)
+* [ ] Serialisation
 * [ ] GC scanning & reference listing
 
 ## Maybe:

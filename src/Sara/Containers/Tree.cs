@@ -66,37 +66,64 @@ namespace Sara
         public Result<long> AddChild(long parent, TElement element)
         {
             if (parent < 0) return Result.Fail<long>();
-            var res = _alloc.Alloc(NodeSize);
+
+            var head = _mem.Read<TreeNodeHead>(parent);
+            
+            if (head.FirstChildPtr >= 0) // There is a sibling chain. Switch function
+            {
+                return AddSibling(head.FirstChildPtr, element);
+            }
+
+            // This is the first child of this parent
+            var res = AllocateAndWriteNode(parent, element);
             if (!res.Success) return Result.Fail<long>();
             var newChildPtr = res.Value;
 
-            // Write the new node into memory
+            // Set ourself as the parent's first child
+            head.FirstChildPtr = newChildPtr;
+            _mem.Write(parent, head);
+            return Result.Ok(newChildPtr);
+        }
+
+        /// <summary>
+        /// Make a new node from an element. Sets parent node inside head, returns result of pointer to new node
+        /// </summary>
+        private Result<long> AllocateAndWriteNode(long parent, TElement element)
+        {
+            // Allocate new node and header
+            var res = _alloc.Alloc(NodeSize);
+            if (!res.Success)
+            {
+                return Result.Fail<long>();
+            }
+
+            // Write a node head and data into memory
             var newChildHead = new TreeNodeHead
             {
                 FirstChildPtr = -1,
                 NextSiblingPtr = -1,
                 ParentPtr = parent
             };
-            _mem.WriteC<TreeNodeHead, TElement>(newChildPtr, newChildHead, element);
+            _mem.WriteC<TreeNodeHead, TElement>(res.Value, newChildHead, element);
+            return res;
+        }
 
-            // Inject the node into the tree
-            var head = _mem.Read<TreeNodeHead>(parent);
-            
-            if (head.FirstChildPtr < 0) // first child. We can just tag ourself in to the head.
-            {
-                head.FirstChildPtr = newChildPtr;
-                _mem.Write(parent, head);
-                return Result.Ok(newChildPtr);
-            }
-
+        public Result<long> AddSibling(long treeNodePtr, TElement element)
+        {
             // Not the first child, we need to walk the sibling link chain
-            var ptr = head.FirstChildPtr;
+            var ptr = treeNodePtr;
             var next = _mem.Read<TreeNodeHead>(ptr);
             while (next.NextSiblingPtr >= 0)
             {
                 ptr = next.NextSiblingPtr;
                 next = _mem.Read<TreeNodeHead>(ptr);
             }
+            
+            // Make a new node
+            var res = AllocateAndWriteNode(next.ParentPtr, element);
+            if (!res.Success) return Result.Fail<long>();
+            var newChildPtr = res.Value;
+
             // Write ourself into the chain
             next.NextSiblingPtr = newChildPtr;
             _mem.Write(ptr, next);
@@ -124,16 +151,64 @@ namespace Sara
             return Result.Ok(head.FirstChildPtr);
         }
 
+        /// <summary>
+        /// Try to get next sibling in chain
+        /// </summary>
         public Result<long> Sibling(long olderSiblingPtr)
         {
             var head = _mem.Read<TreeNodeHead>(olderSiblingPtr);
             if (head.NextSiblingPtr < 0) return Result.Fail<long>();
             return Result.Ok(head.NextSiblingPtr);
         }
+
+        /// <summary>
+        /// Try to get next sibling in chain only if the input was success
+        /// </summary>
+        public Result<long> SiblingR(Result<long> result)
+        {
+            if (!result.Success) return result;
+            return Sibling(result.Value);
+        }
+
+        /// <summary>
+        /// Try to insert an element at the given 0-based index.
+        /// Will fail if index is greater that the current length (i.e. you can add to the end, but the child chain can not be sparse)
+        /// Elements at and after the given index are shifted along.
+        /// Returns a pointer to the new node.
+        /// </summary>
+        /// <param name="parent">Parent element</param>
+        /// <param name="index">zero based index</param>
+        /// <param name="element">data to store in the node</param>
+        public Result<long> InsertChild(long parent, int index, TElement element)
+        {
+            var head = _mem.Read<TreeNodeHead>(parent);
+
+            // Simplest case: a plain add
+            if (head.FirstChildPtr < 0)
+            {
+                if (index != 0) return Result.Fail<long>();
+                return AddChild(parent, element);
+            }
+
+            // Special case: insert at start (need to update parent)
+            if (index == 0) {
+                var newRes = AllocateAndWriteNode(parent, element);
+                if (!newRes.Success) return Result.Fail<long>();
+                var next = head.FirstChildPtr;
+                head.FirstChildPtr = newRes.Value;
+                _mem.Write<TreeNodeHead>(parent, head);
+            }
+
+            // Main case: walk the chain, keeping track of our index
+
+
+
+            return Result.Fail<long>();
+        }
     }
 
     /// <summary>
-    /// The actual tree nodes. Must be nested for C# reasons.
+    /// Tree node headers. These can't contain the body reference for C# reasons
     /// </summary>
     [StructLayout(LayoutKind.Sequential)]
     public struct TreeNodeHead

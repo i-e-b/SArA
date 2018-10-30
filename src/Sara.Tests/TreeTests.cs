@@ -60,10 +60,72 @@ namespace Sara.Tests
         }
 
         [Test]
-        public void can_continue_a_sibling_chain_without_going_to_parent (){ }
+        public void can_continue_a_sibling_chain_without_going_to_parent ()
+        {
+            var mem = new MemorySimulator(Mega.Bytes(1));
+            var subject = new Tree<SampleElement>(new Allocator(0, Mega.Bytes(1), mem), mem);
+            
+            //##### BUILD #####
+            subject.SetRootValue(Sample[0]);
+
+            // First child of root
+            var ptrRes = subject.AddChild(subject.Root, Sample[1]); if (!ptrRes.Success) Assert.Fail("Failed to add child");
+
+            // Second child of root
+            ptrRes = subject.AddChild(subject.Root, Sample[2]); if (!ptrRes.Success) Assert.Fail("Failed to add child");
+            var rc2 = ptrRes.Value;
+
+            // Child of second child
+            ptrRes = subject.AddChild(rc2, Sample[3]); if (!ptrRes.Success) Assert.Fail("Failed to add child");
+
+            //##### ACTION #####
+            // add a third child to root by second child
+            ptrRes = subject.AddSibling(rc2, Sample[4]);
+            if (!ptrRes.Success) Assert.Fail("Failed to add sibling");
+            
+            //##### WALK #####
+            var wres = subject.Child(subject.Root);
+            wres = subject.SiblingR(wres);
+            wres = subject.SiblingR(wres);
+
+            Assert.That(wres.Success, Is.True, "Failed to get full chain");
+            var final = subject.ReadBody(wres.Value);
+            Assert.That(final, Is.EqualTo(Sample[4]), "Incorrect data");
+        }
 
         [Test]
-        public void can_insert_a_sibling_at_an_index (){ }
+        public void can_insert_a_child_at_an_index ()
+        {
+            var mem = new MemorySimulator(Mega.Bytes(1));
+            var subject = new Tree<SampleElement>(new Allocator(0, Mega.Bytes(1), mem), mem);
+            
+            //##### BUILD #####
+            subject.SetRootValue(Sample[0]);
+
+            // First child of root
+            var ptrRes = subject.AddChild(subject.Root, Sample[1]); if (!ptrRes.Success) Assert.Fail("Failed to add child 1");
+
+            // Second child of root
+            ptrRes = subject.AddChild(subject.Root, Sample[2]); if (!ptrRes.Success) Assert.Fail("Failed to add child 2");
+            
+            //##### ACTION #####
+            // add a new second child to root, pushing the other out to 3rd
+            ptrRes = subject.InsertChild(parent: subject.Root, index: 1, element: Sample[4]);
+            if (!ptrRes.Success) Assert.Fail("Failed to add new child");
+            
+            //##### WALK #####
+            var wres1 = subject.Child(subject.Root);
+            var wres2 = subject.SiblingR(wres1);
+            var wres3 = subject.SiblingR(wres2);
+
+            Assert.That(wres3.Success, Is.True, "Failed to get full chain");
+
+            var newChild2 = subject.ReadBody(wres2.Value);
+            Assert.That(newChild2, Is.EqualTo(Sample[4]), "Incorrect data (1)");
+            
+            var newChild3 = subject.ReadBody(wres3.Value);
+            Assert.That(newChild3, Is.EqualTo(Sample[2]), "Incorrect data (2)");
+        }
 
         [Test]
         public void can_remove_a_sibling_from_an_index (){ }
