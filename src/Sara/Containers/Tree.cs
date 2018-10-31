@@ -177,33 +177,67 @@ namespace Sara
         /// Returns a pointer to the new node.
         /// </summary>
         /// <param name="parent">Parent element</param>
-        /// <param name="index">zero based index</param>
+        /// <param name="targetIndex">zero based index</param>
         /// <param name="element">data to store in the node</param>
-        public Result<long> InsertChild(long parent, int index, TElement element)
+        public Result<long> InsertChild(long parent, int targetIndex, TElement element)
         {
-            var head = _mem.Read<TreeNodeHead>(parent);
+            var parentHead = _mem.Read<TreeNodeHead>(parent);
 
             // Simplest case: a plain add
-            if (head.FirstChildPtr < 0)
+            if (parentHead.FirstChildPtr < 0)
             {
-                if (index != 0) return Result.Fail<long>();
+                if (targetIndex != 0) return Result.Fail<long>();
                 return AddChild(parent, element);
             }
 
             // Special case: insert at start (need to update parent)
-            if (index == 0) {
+            if (targetIndex == 0) {
                 var newRes = AllocateAndWriteNode(parent, element);
                 if (!newRes.Success) return Result.Fail<long>();
-                var next = head.FirstChildPtr;
-                head.FirstChildPtr = newRes.Value;
-                _mem.Write<TreeNodeHead>(parent, head);
+                var next = parentHead.FirstChildPtr;
+                parentHead.FirstChildPtr = newRes.Value;
+                
+                var ourHead = _mem.Read<TreeNodeHead>(newRes.Value);
+                ourHead.NextSiblingPtr = next;
+
+                _mem.Write<TreeNodeHead>(newRes.Value, ourHead);
+                _mem.Write<TreeNodeHead>(parent, parentHead);
+
+                return Result.Ok(newRes.Value);
             }
 
             // Main case: walk the chain, keeping track of our index
+            var idx = 1;
+            var prevSibling = Result.Ok(parentHead.FirstChildPtr);
+            while(idx < targetIndex) {
+                var nextRes = SiblingR(prevSibling);
+                if (!nextRes.Success) {
+                    if (idx == targetIndex) break; // writing to end of chain
+                    return Result.Fail<long>(); // tried to write off the end of chain
+                }
+                prevSibling = nextRes;
+                idx++;
+            }
+            // Got the predecessor in sibling chain
 
+            // Inject into chain.
+            // New node
+            var injectedNode = AllocateAndWriteNode(parent, element);
+            if (!injectedNode.Success) return Result.Fail<long>();
+            
+            // Get headers for prev and new
+            var prevSibHead = _mem.Read<TreeNodeHead>(prevSibling.Value);
+            var newHead = _mem.Read<TreeNodeHead>(injectedNode.Value);
 
+            // Swap pointers around
+            newHead.NextSiblingPtr = prevSibHead.NextSiblingPtr; // doesn't matter if this is invalid
+            prevSibHead.NextSiblingPtr = injectedNode.Value;
 
-            return Result.Fail<long>();
+            // Write back
+            _mem.Write<TreeNodeHead>(injectedNode.Value, newHead);
+            _mem.Write<TreeNodeHead>(prevSibling.Value, prevSibHead);
+
+            return Result.Ok(injectedNode.Value);
         }
     }
 

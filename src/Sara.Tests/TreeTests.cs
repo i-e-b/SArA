@@ -104,30 +104,81 @@ namespace Sara.Tests
 
             // First child of root
             var ptrRes = subject.AddChild(subject.Root, Sample[1]); if (!ptrRes.Success) Assert.Fail("Failed to add child 1");
+            // ( 1 )
 
             // Second child of root
             ptrRes = subject.AddChild(subject.Root, Sample[2]); if (!ptrRes.Success) Assert.Fail("Failed to add child 2");
-            
+            // ( 1, 2 )
+
             //##### ACTION #####
             // add a new second child to root, pushing the other out to 3rd
-            ptrRes = subject.InsertChild(parent: subject.Root, index: 1, element: Sample[4]);
+            ptrRes = subject.InsertChild(parent: subject.Root, targetIndex: 1, element: Sample[3]);
             if (!ptrRes.Success) Assert.Fail("Failed to add new child");
+            // ( 1, 3, 2 )
             
+            // add a new first child to root, pushing the others
+            ptrRes = subject.InsertChild(parent: subject.Root, targetIndex: 0, element: Sample[4]);
+            if (!ptrRes.Success) Assert.Fail("Failed to add new child");
+            // ( 4, 1, 3, 2 )
+
+            // add a last child to root
+            ptrRes = subject.InsertChild(parent: subject.Root, targetIndex: 4, element: Sample[5]);
+            if (!ptrRes.Success) Assert.Fail("Failed to add new child");
+            // ( 4, 1, 3, 2, 5 )
+
             //##### WALK #####
             var wres1 = subject.Child(subject.Root);
             var wres2 = subject.SiblingR(wres1);
             var wres3 = subject.SiblingR(wres2);
+            var wres4 = subject.SiblingR(wres3);
+            var wres5 = subject.SiblingR(wres4);
 
-            Assert.That(wres3.Success, Is.True, "Failed to get full chain");
+            Assert.That(wres5.Success, Is.True, "Failed to get full chain");
+            
+            var newChild1 = subject.ReadBody(wres1.Value);
+            Assert.That(newChild1, Is.EqualTo(Sample[4]), "Incorrect data (1)");
 
             var newChild2 = subject.ReadBody(wres2.Value);
-            Assert.That(newChild2, Is.EqualTo(Sample[4]), "Incorrect data (1)");
+            Assert.That(newChild2, Is.EqualTo(Sample[1]), "Incorrect data (2)");
             
             var newChild3 = subject.ReadBody(wres3.Value);
-            Assert.That(newChild3, Is.EqualTo(Sample[2]), "Incorrect data (2)");
+            Assert.That(newChild3, Is.EqualTo(Sample[3]), "Incorrect data (3)");
+            
+            var newChild4 = subject.ReadBody(wres4.Value);
+            Assert.That(newChild4, Is.EqualTo(Sample[2]), "Incorrect data (4)");
+            
+            var newChild5 = subject.ReadBody(wres5.Value);
+            Assert.That(newChild5, Is.EqualTo(Sample[5]), "Incorrect data (5)");
         }
 
         [Test]
-        public void can_remove_a_sibling_from_an_index (){ }
+        public void trying_to_write_past_the_end_of_a_sibling_chain_will_fail ()
+        {
+            var mem = new MemorySimulator(Mega.Bytes(1));
+            var subject = new Tree<SampleElement>(new Allocator(0, Mega.Bytes(1), mem), mem);
+            
+            //##### BUILD #####
+            subject.SetRootValue(Sample[0]);
+
+            // First child of root
+            var ptrRes = subject.AddChild(subject.Root, Sample[1]); if (!ptrRes.Success) Assert.Fail("Failed to add child 1");
+            // ( 1 )
+
+            // Second child of root
+            ptrRes = subject.AddChild(subject.Root, Sample[2]); if (!ptrRes.Success) Assert.Fail("Failed to add child 2");
+            // ( 1, 2 )
+
+            //##### ACTION #####
+            // Try to write past the last index
+            ptrRes = subject.InsertChild(parent: subject.Root, targetIndex: 3, element: Sample[3]);
+
+            Assert.That(ptrRes.Success, Is.False, "Wrote pass the last valid index");
+        }
+
+        [Test]
+        public void can_remove_a_sibling_from_an_index()
+        {
+            Assert.Fail("not implemented");
+        }
     }
 }
