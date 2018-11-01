@@ -337,7 +337,38 @@ namespace Sara.Tests
         [Test]
         public void after_deleting_root_node_all_memory_should_be_released ()
         {
-            Assert.Fail("not implemented");
+            var mem = new MemorySimulator(Mega.Bytes(1));
+            var alloc = new Allocator(0, Mega.Bytes(1), mem);
+
+            alloc.GetState(out var bytes, out _, out _, out _, out _, out _);
+            Assert.That(bytes, Is.Zero, "Allocator did not start empty");
+
+            //##### BUILD #####
+            var subject = new Tree<SampleElement>(alloc, mem);
+            subject.SetRootValue(Sample[0]);
+
+            // First child of root
+            var ptrRes = subject.AddChild(subject.Root, Sample[1]);
+            if (!ptrRes.Success) Assert.Fail("Failed to add child");
+
+            // Second child of root
+            ptrRes = subject.AddChild(subject.Root, Sample[2]);
+            if (!ptrRes.Success) Assert.Fail("Failed to add child");
+            var rc2 = ptrRes.Value;
+
+            // Child of second child
+            ptrRes = subject.AddChild(rc2, Sample[3]);
+            if (!ptrRes.Success) Assert.Fail("Failed to add child");
+            
+            alloc.GetState(out bytes, out _, out _, out _, out _, out _);
+            Assert.That(bytes, Is.Not.Zero, "No memory was allocated");
+
+            //##### Destroy #####
+            subject.Deallocate();
+            
+            alloc.GetState(out bytes, out _, out _, out _, out _, out _);
+            Assert.That(bytes, Is.Zero, "Not all memory was released");
+
         }
     }
 }

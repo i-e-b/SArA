@@ -137,6 +137,7 @@ namespace Sara
 
         public void Deallocate()
         {
+            DeleteNode(Root);
         }
 
         public TElement ReadBody(long treeNodePtr)
