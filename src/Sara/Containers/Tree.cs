@@ -239,6 +239,85 @@ namespace Sara
 
             return Result.Ok(injectedNode.Value);
         }
+
+        public void RemoveChild(long parent, int targetIndex)
+        {
+            // TODO: (always remember to dealloc the removed item)
+            long deleteTargetPtr;
+            TreeNodeHead deleteTargetHead;
+
+            var parentHead = _mem.Read<TreeNodeHead>(parent);
+            if (parentHead.FirstChildPtr < 0) return; // empty parent
+
+            // 1. If targetIndex == 0, short the parent into the next
+            if (targetIndex == 0) {
+                deleteTargetPtr = parentHead.FirstChildPtr;
+                if (deleteTargetPtr < 0) return; // there are no children
+                
+                // Skip over this item
+                deleteTargetHead = _mem.Read<TreeNodeHead>(deleteTargetPtr);
+                parentHead.FirstChildPtr = deleteTargetHead.NextSiblingPtr;
+                _mem.Write<TreeNodeHead>(parent, parentHead);
+
+                DeleteNode(deleteTargetPtr);
+
+                return;
+            }
+
+            // 2. Scan through sibling chain. Short-circuit when we find the index
+            // Main case: walk the chain, keeping track of our index
+            var idx = 1;
+            var leftSibling = Result.Ok(parentHead.FirstChildPtr);
+            while(idx < targetIndex) {
+                var nextRes = SiblingR(leftSibling);
+                if (!nextRes.Success) {
+                    return; // tried to delete off the end of chain
+                }
+                leftSibling = nextRes;
+                idx++;
+            }
+
+            // Got the predecessor in sibling chain
+            var leftSiblingHead = _mem.Read<TreeNodeHead>(leftSibling.Value);
+            if (leftSiblingHead.NextSiblingPtr < 0) return; // deleting at end of chain
+            
+            // Set `leftSiblingHead` to point at its target's target
+            //  [left] --> [to del] --> [whatever]
+            //  [left] ---------------> [whatever]
+            deleteTargetPtr = leftSiblingHead.NextSiblingPtr;
+            deleteTargetHead = _mem.Read<TreeNodeHead>(deleteTargetPtr);
+            leftSiblingHead.NextSiblingPtr = deleteTargetHead.NextSiblingPtr;
+            _mem.Write<TreeNodeHead>(leftSibling.Value, leftSiblingHead);
+
+            DeleteNode(deleteTargetPtr);
+        }
+        
+        /// <summary>
+        /// Deallocate node and all it's children, recursively
+        /// </summary>
+        private void DeleteNode(long treeNodePtr)
+        {
+            if (treeNodePtr < 0) return;
+            var head = _mem.Read<TreeNodeHead>(treeNodePtr);
+            RecursiveDelete(head.FirstChildPtr);
+            _alloc.Deref(treeNodePtr);
+        }
+
+        /// <summary>
+        /// Deallocate node and all its children AND siblings, recursively
+        /// </summary>
+        private void RecursiveDelete(long treeNodePtr)
+        {
+            if (treeNodePtr < 0) return;
+            var current = Result.Ok(treeNodePtr);
+            while (current.Success) {
+                var head = _mem.Read<TreeNodeHead>(current.Value);
+                if (head.FirstChildPtr >= 0) RecursiveDelete(head.FirstChildPtr);
+                var next = SiblingR(current);
+                _alloc.Deref(current.Value);
+                current = next;
+            }
+        }
     }
 
     /// <summary>

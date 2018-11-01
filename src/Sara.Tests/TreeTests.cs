@@ -178,6 +178,165 @@ namespace Sara.Tests
         [Test]
         public void can_remove_a_sibling_from_an_index()
         {
+            var mem = new MemorySimulator(Mega.Bytes(1));
+            var subject = new Tree<SampleElement>(new Allocator(0, Mega.Bytes(1), mem), mem);
+            
+            //##### BUILD #####
+            subject.SetRootValue(Sample[0]);
+
+            // First child of root
+            var ptrRes = subject.AddChild(subject.Root, Sample[1]); if (!ptrRes.Success) Assert.Fail("Failed to add child 1");
+            // ( 1 )
+
+            // Second child of root
+            ptrRes = subject.AddChild(subject.Root, Sample[2]); if (!ptrRes.Success) Assert.Fail("Failed to add child 2");
+            // ( 1, 2 )
+            
+            // Third child of root
+            ptrRes = subject.AddChild(subject.Root, Sample[3]); if (!ptrRes.Success) Assert.Fail("Failed to add child 3");
+            // ( 1, 2, 3 )
+
+            //##### ACTION #####
+            // Delete middle item
+            subject.RemoveChild(parent: subject.Root, targetIndex: 1);
+            // ( 1, 3 )
+
+            
+            //##### WALK #####
+            var wres1 = subject.Child(subject.Root);
+            var wres2 = subject.SiblingR(wres1);
+
+            Assert.That(wres2.Success, Is.True, "Failed to get full chain");
+            
+            var newChild1 = subject.ReadBody(wres1.Value);
+            Assert.That(newChild1, Is.EqualTo(Sample[1]), "Incorrect data (1)");
+
+            var newChild2 = subject.ReadBody(wres2.Value);
+            Assert.That(newChild2, Is.EqualTo(Sample[3]), "Incorrect data (2)");
+        }
+        
+        [Test]
+        public void can_remove_first_child_by_an_index()
+        {
+            var mem = new MemorySimulator(Mega.Bytes(1));
+            var subject = new Tree<SampleElement>(new Allocator(0, Mega.Bytes(1), mem), mem);
+            
+            //##### BUILD #####
+            subject.SetRootValue(Sample[0]);
+
+            // First child of root
+            var ptrRes = subject.AddChild(subject.Root, Sample[1]); if (!ptrRes.Success) Assert.Fail("Failed to add child 1");
+            // ( 1 )
+
+            // Second child of root
+            ptrRes = subject.AddChild(subject.Root, Sample[2]); if (!ptrRes.Success) Assert.Fail("Failed to add child 2");
+            // ( 1, 2 )
+            
+            // Third child of root
+            ptrRes = subject.AddChild(subject.Root, Sample[3]); if (!ptrRes.Success) Assert.Fail("Failed to add child 3");
+            // ( 1, 2, 3 )
+
+            //##### ACTION #####
+            // Delete first item
+            subject.RemoveChild(parent: subject.Root, targetIndex: 0);
+            // ( 2, 3 )
+
+            
+            //##### WALK #####
+            var wres1 = subject.Child(subject.Root);
+            var wres2 = subject.SiblingR(wres1);
+
+            Assert.That(wres2.Success, Is.True, "Failed to get full chain");
+            
+            var newChild1 = subject.ReadBody(wres1.Value);
+            Assert.That(newChild1, Is.EqualTo(Sample[2]), "Incorrect data (1)");
+
+            var newChild2 = subject.ReadBody(wres2.Value);
+            Assert.That(newChild2, Is.EqualTo(Sample[3]), "Incorrect data (2)");
+        }
+        
+        [Test]
+        public void can_remove_last_child_by_an_index()
+        {
+            var mem = new MemorySimulator(Mega.Bytes(1));
+            var subject = new Tree<SampleElement>(new Allocator(0, Mega.Bytes(1), mem), mem);
+            
+            //##### BUILD #####
+            subject.SetRootValue(Sample[0]);
+
+            // First child of root
+            var ptrRes = subject.AddChild(subject.Root, Sample[1]); if (!ptrRes.Success) Assert.Fail("Failed to add child 1");
+            // ( 1 )
+
+            // Second child of root
+            ptrRes = subject.AddChild(subject.Root, Sample[2]); if (!ptrRes.Success) Assert.Fail("Failed to add child 2");
+            // ( 1, 2 )
+            
+            // Third child of root
+            ptrRes = subject.AddChild(subject.Root, Sample[3]); if (!ptrRes.Success) Assert.Fail("Failed to add child 3");
+            // ( 1, 2, 3 )
+
+            //##### ACTION #####
+            // Delete first item
+            subject.RemoveChild(parent: subject.Root, targetIndex: 2);
+            // ( 1, 2 )
+
+            
+            //##### WALK #####
+            var wres1 = subject.Child(subject.Root);
+            var wres2 = subject.SiblingR(wres1);
+
+            Assert.That(wres2.Success, Is.True, "Failed to get full chain");
+            
+            Assert.That(subject.SiblingR(wres2).Success, Is.False, "Resulting chain was too long");
+            
+            var newChild1 = subject.ReadBody(wres1.Value);
+            Assert.That(newChild1, Is.EqualTo(Sample[1]), "Incorrect data (1)");
+
+            var newChild2 = subject.ReadBody(wres2.Value);
+            Assert.That(newChild2, Is.EqualTo(Sample[2]), "Incorrect data (2)");
+        }
+
+        [Test]
+        public void attempting_to_remove_from_an_invalid_index_is_ignored ()
+        {
+            var mem = new MemorySimulator(Mega.Bytes(1));
+            var subject = new Tree<SampleElement>(new Allocator(0, Mega.Bytes(1), mem), mem);
+            
+            //##### BUILD #####
+            subject.SetRootValue(Sample[0]);
+
+            // First child of root
+            var ptrRes = subject.AddChild(subject.Root, Sample[1]); if (!ptrRes.Success) Assert.Fail("Failed to add child 1");
+            // ( 1 )
+
+            // Second child of root
+            ptrRes = subject.AddChild(subject.Root, Sample[2]); if (!ptrRes.Success) Assert.Fail("Failed to add child 2");
+            // ( 1, 2 )
+
+            //##### ACTION #####
+            // Delete invalid item
+            subject.RemoveChild(parent: subject.Root, targetIndex: 100);
+            // ( 1, 2 )
+
+            
+            //##### WALK #####
+            var wres1 = subject.Child(subject.Root);
+            var wres2 = subject.SiblingR(wres1);
+
+            Assert.That(wres2.Success, Is.True, "Failed to get full chain");
+            
+            var newChild1 = subject.ReadBody(wres1.Value);
+            Assert.That(newChild1, Is.EqualTo(Sample[1]), "Incorrect data (1)");
+
+            var newChild2 = subject.ReadBody(wres2.Value);
+            Assert.That(newChild2, Is.EqualTo(Sample[2]), "Incorrect data (2)");
+
+        }
+
+        [Test]
+        public void after_deleting_root_node_all_memory_should_be_released ()
+        {
             Assert.Fail("not implemented");
         }
     }
