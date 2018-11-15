@@ -342,6 +342,27 @@ namespace Sara.Tests
             Assert.That(subject.Length(), Is.EqualTo(count));
         }
 
+        [Test]
+        public void can_serialise_and_deserialise_a_vector ()
+        {
+            var mem = new MemorySimulator(Mega.Bytes(2));
+            var original = new Vector<SampleElement>(new Allocator(0, Mega.Bytes(1), mem), mem);
+
+            original.Push(Sample1());
+            original.Push(Sample2());
+            original.Push(Sample3());
+
+            var serial = original.Serialise();
+
+            Assert.That(serial.Get(0), Is.Not.Zero, "Serialisation failed");
+
+            var duplicate = new Vector<SampleElement>(new Allocator(Mega.Bytes(1), Mega.Bytes(1), mem), mem);
+            duplicate.Deserialise(serial); // uses a different memory space -- no cheating!
+
+            Assert.That(duplicate.Get(0), Is.EqualTo(original.Get(0)));
+            Assert.That(duplicate.Get(1), Is.EqualTo(original.Get(1)));
+            Assert.That(duplicate.Get(2), Is.EqualTo(original.Get(2)));
+        }
 
         public struct HugeStruct {
             public ReallyBigStruct a;

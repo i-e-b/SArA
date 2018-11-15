@@ -6,7 +6,9 @@
     /// Uses an allocator and memory interface. Internally, it's a kind of binary-search skip list.
     /// </summary>
     /// <typeparam name="TElement">A simple type that can be serialised to a byte array</typeparam>
-    public class Vector<TElement> : IGcContainer where TElement: unmanaged 
+    public class Vector<TElement> :
+        IWireType,
+        IGcContainer where TElement: unmanaged 
     {
         // Fixed sizes -- these are structural to the code and must not change
         public const int PTR_SIZE = sizeof(long);
@@ -472,8 +474,6 @@
         /// <summary>
         /// Swap two elements by index.
         /// </summary>
-        /// <param name="index1"></param>
-        /// <param name="index2"></param>
         public Result<Unit> Swap(uint index1, uint index2)
         {
             var A = PtrOfElem(index1);
@@ -512,6 +512,69 @@
             result.Push((ulong) _skipTable);
 
             return result;
+        }
+
+        /// <summary>
+        /// Build a byte vector that can be used to transmit the instance.
+        /// This is NOT thread-safe
+        /// </summary>
+        public Vector<byte> Serialise()
+        {
+            // reasonably trivial -- spew the bytes of each item in turn
+            // If the contained item was to be a container, it would be the serialised bytes to be pumped in?
+            // but Vector forces us to have a simple, fixed-size content.
+            var outp = new Vector<byte>(_alloc, _mem);
+            outp.Prealloc((uint) (ElementByteSize * _elementCount));
+            uint idx = 0;
+            for (uint i = 0; i < _elementCount; i++)
+            {
+                var res = PtrOfElem(i);
+                if (!res.Success) {
+                    outp.Deallocate();
+                    return null;
+                }
+
+                for (int j = 0; j < ElementByteSize; j++)
+                {
+                    var val = _mem.Read<byte>(res.Value + j);
+                    outp.Set(idx, val);
+                    idx++;
+                }
+            }
+            return outp;
+        }
+
+        /// <summary>
+        /// Reconstruct an instance from a byte vector.
+        /// Expects the same type and this instance is empty
+        /// </summary>
+        public Result<Unit> Deserialise(Vector<byte> data)
+        {
+            // We have to assume we've got the right shape
+            if (!IsValid) return Result.Fail<Unit>();
+
+            var ptrRes = _alloc.Alloc(ElementByteSize);
+            if (!ptrRes.Success) return Result.Fail<Unit>();
+            var tmpPtr = ptrRes.Value;
+            var bytes = data.Length();
+
+            for (uint i = 0; i < bytes; i++)
+            {
+                var off = i % ElementByteSize;
+                var bres = data.Get(i);
+                if (!bres.Success) {
+                    _alloc.Deref(tmpPtr);
+                    return Result.Fail<Unit>();
+                }
+                _mem.Write(tmpPtr + off, bres.Value);
+
+                if (off + 1 == ElementByteSize) { // filled one
+                    var val = _mem.Read<TElement>(tmpPtr);
+                    Push(val);
+                }
+            }
+
+            return Result.Fail<Unit>();
         }
     }
 }
