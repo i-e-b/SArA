@@ -1,4 +1,5 @@
 ﻿using System.Runtime.InteropServices;
+using JetBrains.Annotations;
 
 namespace Sara
 {
@@ -19,8 +20,8 @@ namespace Sara
     /// </remarks>
     public class Tree<TElement> : IGcContainer where TElement:unmanaged
     {
-        private readonly Allocator _alloc;
-        private readonly IMemoryAccess _mem;
+        [NotNull] private readonly Allocator _alloc;
+        [NotNull] private readonly IMemoryAccess _mem;
 
         public const uint POINTER_SIZE = sizeof(long);
         public const uint NODE_HEAD_SIZE = POINTER_SIZE * 3; //sizeof(TreeNodeHead);
@@ -31,7 +32,7 @@ namespace Sara
 
         public readonly long Root;
 
-        public unsafe Tree(Allocator alloc, IMemoryAccess mem)
+        public unsafe Tree([NotNull]Allocator alloc, [NotNull]IMemoryAccess mem)
         {
             _alloc = alloc;
             _mem = mem;
@@ -104,7 +105,7 @@ namespace Sara
                 NextSiblingPtr = -1,
                 ParentPtr = parent
             };
-            _mem.WriteC<TreeNodeHead, TElement>(res.Value, newChildHead, element);
+            _mem.WriteC(res.Value, newChildHead, element);
             return res;
         }
 
@@ -201,8 +202,8 @@ namespace Sara
                 var ourHead = _mem.Read<TreeNodeHead>(newRes.Value);
                 ourHead.NextSiblingPtr = next;
 
-                _mem.Write<TreeNodeHead>(newRes.Value, ourHead);
-                _mem.Write<TreeNodeHead>(parent, parentHead);
+                _mem.Write(newRes.Value, ourHead);
+                _mem.Write(parent, parentHead);
 
                 return Result.Ok(newRes.Value);
             }
@@ -235,15 +236,14 @@ namespace Sara
             prevSibHead.NextSiblingPtr = injectedNode.Value;
 
             // Write back
-            _mem.Write<TreeNodeHead>(injectedNode.Value, newHead);
-            _mem.Write<TreeNodeHead>(prevSibling.Value, prevSibHead);
+            _mem.Write(injectedNode.Value, newHead);
+            _mem.Write(prevSibling.Value, prevSibHead);
 
             return Result.Ok(injectedNode.Value);
         }
 
         public void RemoveChild(long parent, int targetIndex)
         {
-            // TODO: (always remember to dealloc the removed item)
             long deleteTargetPtr;
             TreeNodeHead deleteTargetHead;
 
@@ -258,7 +258,7 @@ namespace Sara
                 // Skip over this item
                 deleteTargetHead = _mem.Read<TreeNodeHead>(deleteTargetPtr);
                 parentHead.FirstChildPtr = deleteTargetHead.NextSiblingPtr;
-                _mem.Write<TreeNodeHead>(parent, parentHead);
+                _mem.Write(parent, parentHead);
 
                 DeleteNode(deleteTargetPtr);
 
@@ -288,7 +288,7 @@ namespace Sara
             deleteTargetPtr = leftSiblingHead.NextSiblingPtr;
             deleteTargetHead = _mem.Read<TreeNodeHead>(deleteTargetPtr);
             leftSiblingHead.NextSiblingPtr = deleteTargetHead.NextSiblingPtr;
-            _mem.Write<TreeNodeHead>(leftSibling.Value, leftSiblingHead);
+            _mem.Write(leftSibling.Value, leftSiblingHead);
 
             DeleteNode(deleteTargetPtr);
         }

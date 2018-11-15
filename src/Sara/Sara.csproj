@@ -45,6 +45,7 @@
     <Compile Include="Containers\IGcContainer.cs" />
     <Compile Include="Containers\IWireType.cs" />
     <Compile Include="Containers\Tree.cs" />
+    <Compile Include="Helpers\Annotations.cs" />
     <Compile Include="IMemoryAccess.cs" />
     <Compile Include="Helpers\MemorySimulator.cs" />
     <Compile Include="Helpers\Result.cs" />

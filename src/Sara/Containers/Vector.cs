@@ -1,4 +1,6 @@
-﻿namespace Sara
+﻿using JetBrains.Annotations;
+
+namespace Sara
 {
     /// <summary>
     /// A variable length array of variable elements.
@@ -59,8 +61,8 @@
         public readonly int ChunkHeaderSize;
         public readonly ushort ChunkBytes;
 
-        private readonly Allocator _alloc;
-        private readonly IMemoryAccess _mem;
+        [NotNull] private readonly Allocator _alloc;
+        [NotNull] private readonly IMemoryAccess _mem;
         private uint _elementCount;    // how long is the logical array
         private int  _skipEntries;     // how long is the logical skip table
         private bool _skipTableDirty;  // does the skip table need updating?
@@ -87,7 +89,7 @@
         /// A variable length array of variable elements.
         /// Create a new vector base in the first free section
         /// </summary>
-        public Vector(Allocator alloc, IMemoryAccess mem)
+        public Vector([NotNull]Allocator alloc, [NotNull]IMemoryAccess mem)
         {
             _alloc = alloc;
             _mem = mem;
@@ -110,7 +112,7 @@
             if (ElemsPerChunk > TARGET_ELEMS_PER_CHUNK)
                 ElemsPerChunk = TARGET_ELEMS_PER_CHUNK; // no need to go crazy with small items.
 
-            ChunkBytes = (ushort) ((ChunkHeaderSize) + (ElemsPerChunk * ElementByteSize));
+            ChunkBytes = (ushort) (ChunkHeaderSize + (ElemsPerChunk * ElementByteSize));
 
 
 
@@ -200,7 +202,7 @@
                     }
 
                     var iptr = newTablePtr + (SKIP_ELEM_SIZE * i);
-                    _mem.Write<uint>(iptr, (uint)chunkIndex);
+                    _mem.Write<uint>(iptr, chunkIndex);
                     _mem.Write<long>(iptr + INDEX_SIZE, chunkPtr);
                     newSkipEntries++;
                     target += stride;
@@ -368,14 +370,13 @@
         /// </summary>
         public Result<TElement> Pop()
         {
-            TElement result;
             if (_elementCount == 0) return Result.Fail<TElement>();
 
             var index = _elementCount - 1;
             var entryIdx = index % ElemsPerChunk;
 
             // Get the value
-            result = _mem.Read<TElement>(_endChunkPtr + ChunkHeaderSize + (ElementByteSize * entryIdx));
+            var result = _mem.Read<TElement>(_endChunkPtr + ChunkHeaderSize + (ElementByteSize * entryIdx));
             
             if (entryIdx < 1 && _elementCount > 0) // need to dealloc end chunk
             {
@@ -552,6 +553,7 @@
         {
             // We have to assume we've got the right shape
             if (!IsValid) return Result.Fail<Unit>();
+            if (data == null) return Result.Fail<Unit>();
 
             var ptrRes = _alloc.Alloc(ElementByteSize);
             if (!ptrRes.Success) return Result.Fail<Unit>();

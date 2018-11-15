@@ -133,22 +133,22 @@
 
         public bool Get(TKey key, out TValue value)
         {
-            uint index;
-            if (Find(key, out index))
-            {
-                var res = buckets.Get(index);
-                if (!res.Success)
-                {
-                    value = default;
-                    return false;
-                }
+            value = default;
 
-                value = res.Value.value;
-                return true;
+            if (!Find(key, out var index)) return false;
+            if (buckets == null) return false;
+
+
+            var res = buckets.Get(index);
+            if (!res.Success)
+            {
+                value = default;
+                return false;
             }
 
-            value = default;
-            return false;
+            value = res.Value.value;
+            return true;
+
         }
 
 
@@ -169,7 +169,8 @@
             for (uint i = 0; i < count; i++)
             {
                 var indexCurrent = (indexInit + i) & countMod;
-
+                
+                if (buckets == null) return false;
                 var current = buckets.Get(indexCurrent);
                 if ( ! current.Success) return false; // internal failure
 
@@ -185,7 +186,8 @@
                 {
                     if (!canReplace)
                         return false;
-
+                    
+                    if (buckets == null) return false;
                     buckets.Set(indexCurrent, entry);
                     return true;
                 }
@@ -207,9 +209,6 @@
 
         private bool Find(TKey key, out uint index)
         {
-            //if (key == null)
-            //    throw new ArgumentNullException(nameof(key));
-
             index = 0;
             if (countUsed <= 0) return false;
 
@@ -219,6 +218,8 @@
 
             for (uint i = 0; i < count; i++)
             {
+                if (buckets == null) return false;
+
                 index = (indexInit + i) & countMod;
                 var res = buckets.Get(index);
                 if ( ! res.Success ) return false; // internal failure
@@ -237,27 +238,28 @@
         private bool RemoveInternal(TKey key)
         {
             uint index;
-            if (Find(key, out index))
+            if (!Find(key, out index)) return false;
+
+            for (uint i = 0; i < count; i++)
             {
-                for (uint i = 0; i < count; i++)
+                var curIndex = (index + i) & countMod;
+                var nextIndex = (index + i + 1) & countMod;
+                    
+                if (buckets == null) return false;
+                var res = buckets.Get(nextIndex);
+                if ( ! res.Success ) return false; // internal failure
+
+                if ((res.Value.hash == 0) || (DistanceToInitIndex(nextIndex) == 0))
                 {
-                    var curIndex = (index + i) & countMod;
-                    var nextIndex = (index + i + 1) & countMod;
+                    if (buckets == null) return false;
+                    buckets.Set(curIndex, default);
 
-                    var res = buckets.Get(nextIndex);
-                    if ( ! res.Success ) return false; // internal failure
+                    if (--countUsed == shrinkAt) Resize(shrinkAt);
 
-                    if ((res.Value.hash == 0) || (DistanceToInitIndex(nextIndex) == 0))
-                    {
-                        buckets.Set(curIndex, default);
-
-                        if (--countUsed == shrinkAt) Resize(shrinkAt);
-
-                        return true;
-                    }
-
-                    Swap(buckets, curIndex, nextIndex);
+                    return true;
                 }
+
+                Swap(buckets, curIndex, nextIndex);
             }
 
             return false;
@@ -265,6 +267,7 @@
 
         private uint DistanceToInitIndex(uint indexStored)
         {
+            if (buckets == null) return indexStored + count;
 
             var indexInit = buckets.Get(indexStored).Value.hash & countMod;
             if (indexInit <= indexStored) return indexStored - indexInit;
@@ -289,8 +292,11 @@
         /// Swap a vector entry with an external value
         /// </summary>
         private bool Swap(Vector<Entry> vec, uint idx, ref Entry newEntry) {
+            if (vec == null) return false;
+
             var temp = vec.Get(idx);
             if (!temp.Success) return false;
+
             vec.Set(idx, newEntry);
             newEntry = temp.Value;
             return true;
@@ -300,16 +306,13 @@
         /// Swap two vector entries
         /// </summary>
         private void Swap(Vector<Entry> vec, uint idx1, uint idx2) {
+            if (vec == null) return;
             vec.Swap(idx1, idx2);
         }
         
         public Vector<KVP> AllEntries()
         {
-            var size = 0;
-            for (uint i = 0; i < count; i++) {
-                var res = buckets.Get(i);
-                if (res.Success && res.Value.hash != 0) size++;
-            }
+            if (buckets == null) return null;
 
             var result = new Vector<KVP>(_alloc, _mem);
 
@@ -351,6 +354,8 @@
         public Vector<ulong> References()
         {
             var everything = AllEntries();
+            if (everything == null) return null;
+
             // TODO: filter pointers here, or let MECS do it?
             // Also, how do we host the GC-reference-list itself? Do we create a special one, ignore its references and immediately abandon?
             var result = new Vector<ulong>(_alloc, _mem);

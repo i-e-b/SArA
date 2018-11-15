@@ -1,4 +1,6 @@
-﻿namespace Sara
+﻿using JetBrains.Annotations;
+
+namespace Sara
 {
     /// <summary>
     /// A bottom-to-top sequential allocator, for experimental purposes
@@ -23,7 +25,7 @@
         /// <summary>
         /// Abstract interface to memory state
         /// </summary>
-        private readonly IMemoryAccess _memory;
+        [NotNull] private readonly IMemoryAccess _memory;
 
         /// <summary>
         /// Pointer to array of ushort, length is equal to _arenaCount.
@@ -54,7 +56,7 @@
         /// <param name="start">Start of space (bytes) available to the allocator. Some will be reserved for arena tracking</param>
         /// <param name="limit">Maximum memory before an out-of-memory condition is flagged (bytes)</param>
         /// <param name="memory">Access to real or simulated memory</param>
-        public Allocator(long start, long limit, IMemoryAccess memory)
+        public Allocator(long start, long limit, [NotNull]IMemoryAccess memory)
         {
             _limit = limit;
             _memory = memory;
@@ -175,7 +177,7 @@
         {
             if (ptr < _start || ptr > _limit) return Result.Fail<int>();
             int arena = (int) ((ptr - _start) / ArenaSize);
-            if (arena < 0 || arena >= _arenaCount) return Result.Fail<int>();;
+            if (arena < 0 || arena >= _arenaCount) return Result.Fail<int>();
             return Result.Ok(arena);
         }
 
@@ -214,6 +216,8 @@
         /// </summary>
         public void ScanAndSweep(Vector<long> referenceList)
         {
+            if (referenceList == null) return;
+
             // mark all arenas zero referenced
             for (int i = 0; i < _arenaCount; i++)
             {

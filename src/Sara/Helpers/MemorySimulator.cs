@@ -1,11 +1,13 @@
-﻿namespace Sara
+﻿using JetBrains.Annotations;
+
+namespace Sara
 {
     /// <summary>
     /// Behaves like raw memory access, for simulating embedded systems
     /// </summary>
     public class MemorySimulator : IMemoryAccess
     {
-        private readonly byte[] _data;
+        [NotNull] private readonly byte[] _data;
 
         public MemorySimulator(long byteSize)
         {
@@ -59,7 +61,7 @@
     public class OffsetMemorySimulator : IMemoryAccess
     {
         private readonly long _offset;
-        private readonly byte[] _data;
+        [NotNull] private readonly byte[] _data;
 
         public OffsetMemorySimulator(long byteSize, long offset)
         {
